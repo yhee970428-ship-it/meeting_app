@@ -9,10 +9,12 @@ app = Flask(__name__)
 
 DB_FILE = 'meeting_data.db'
 
-# DB 초기화 및 테이블 구조 생성
+# DB 초기화 및 열 자동 추가(마이그레이션)
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
+    # 테이블 생성
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS topics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,6 +27,15 @@ def init_db():
             reupload_reason TEXT
         )
     ''')
+    
+    # 기존 DB에 file_data 컬럼이 없는 경우 대비한 자동 추가
+    cursor.execute("PRAGMA table_info(topics)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'file_data' not in columns:
+        cursor.execute("ALTER TABLE topics ADD COLUMN file_data BLOB")
+    if 'reupload_reason' not in columns:
+        cursor.execute("ALTER TABLE topics ADD COLUMN reupload_reason TEXT")
+        
     conn.commit()
     conn.close()
 
@@ -69,16 +80,19 @@ def add_topics():
 # 안건 목록 조회
 @app.route('/api/topics', methods=['GET'])
 def get_topics():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, meeting_date, title, dept, original_filename, status, reupload_reason FROM topics ORDER BY meeting_date DESC, id ASC')
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, meeting_date, title, dept, original_filename, status, reupload_reason FROM topics ORDER BY meeting_date DESC, id ASC')
+        rows = cursor.fetchall()
+        conn.close()
 
-    topics = [dict(row) for row in rows]
-    return jsonify(topics)
+        topics = [dict(row) for row in rows]
+        return jsonify(topics)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# 파일 업로드 (DB에 영구 저장)
+# 파일 업로드 (DB 영구 저장)
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
@@ -132,7 +146,7 @@ def download_single_file(topic_id):
         )
     return "파일을 찾을 수 없습니다.", 404
 
-# PPT 자동 병합 (DB에 저장된 파일들로 병합)
+# PPT 자동 병합
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
     conn = get_db_connection()
@@ -145,11 +159,9 @@ def merge_ppts():
         return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없습니다."}), 400
 
     try:
-        # 첫 번째 PPT 읽기
         first_bytes = io.BytesIO(rows[0]['file_data'])
         base_prs = Presentation(first_bytes)
 
-        # 두 번째 파일부터 슬라이드 추가
         for row in rows[1:]:
             sub_bytes = io.BytesIO(row['file_data'])
             sub_prs = Presentation(sub_bytes)
