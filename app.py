@@ -7,14 +7,9 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = 'uploads'
-OUTPUT_FOLDER = 'outputs'
 DB_FILE = 'meeting_data.db'
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-
-# DB 초기화
+# DB 초기화 및 테이블 구조 생성
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -24,8 +19,8 @@ def init_db():
             meeting_date TEXT NOT NULL,
             title TEXT NOT NULL,
             dept TEXT NOT NULL,
-            file_path TEXT,
             original_filename TEXT,
+            file_data BLOB,
             status TEXT DEFAULT '제출필요',
             reupload_reason TEXT
         )
@@ -76,14 +71,14 @@ def add_topics():
 def get_topics():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM topics ORDER BY meeting_date DESC, id ASC')
+    cursor.execute('SELECT id, meeting_date, title, dept, original_filename, status, reupload_reason FROM topics ORDER BY meeting_date DESC, id ASC')
     rows = cursor.fetchall()
     conn.close()
 
     topics = [dict(row) for row in rows]
     return jsonify(topics)
 
-# 파일 업로드 (재제출 사유 포함)
+# 파일 업로드 (DB에 영구 저장)
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
@@ -98,26 +93,22 @@ def upload_file(topic_id):
     if not file.filename.lower().endswith(('.ppt', '.pptx')):
         return jsonify({"success": False, "message": "PPT/PPTX 파일만 업로드 가능합니다."}), 400
 
+    file_bytes = file.read()
     original_filename = file.filename
-    ext = os.path.splitext(original_filename)[1]
-    filename = f"topic_{topic_id}{ext}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
 
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 기존 상태 확인
     cursor.execute('SELECT status FROM topics WHERE id = ?', (topic_id,))
     row = cursor.fetchone()
     
     status = "제출완료"
-    if row and row['status'] == '제출완료':
+    if row and row['status'] in ['제출완료', '재제출완료']:
         status = "재제출완료"
 
     cursor.execute(
-        'UPDATE topics SET file_path = ?, original_filename = ?, status = ?, reupload_reason = ? WHERE id = ?',
-        (filepath, original_filename, status, reason, topic_id)
+        'UPDATE topics SET original_filename = ?, file_data = ?, status = ?, reupload_reason = ? WHERE id = ?',
+        (original_filename, file_bytes, status, reason, topic_id)
     )
     conn.commit()
     conn.close()
@@ -129,33 +120,40 @@ def upload_file(topic_id):
 def download_single_file(topic_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT file_path, original_filename FROM topics WHERE id = ?', (topic_id,))
+    cursor.execute('SELECT original_filename, file_data FROM topics WHERE id = ?', (topic_id,))
     row = cursor.fetchone()
     conn.close()
 
-    if row and row['file_path'] and os.path.exists(row['file_path']):
-        return send_file(row['file_path'], as_attachment=True, download_name=row['original_filename'])
-    return "파일을 찾을 수 없습니다. (서버 재부팅으로 인해 파일이 유실되었을 수 있으니 다시 제출해 주세요.)", 404
+    if row and row['file_data']:
+        return send_file(
+            io.BytesIO(row['file_data']),
+            as_attachment=True,
+            download_name=row['original_filename']
+        )
+    return "파일을 찾을 수 없습니다.", 404
 
-# PPT 자동 병합
+# PPT 자동 병합 (DB에 저장된 파일들로 병합)
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT file_path FROM topics WHERE status IN ("제출완료", "재제출완료") AND file_path IS NOT NULL ORDER BY id ASC')
+    cursor.execute('SELECT file_data FROM topics WHERE status IN ("제출완료", "재제출완료") AND file_data IS NOT NULL ORDER BY id ASC')
     rows = cursor.fetchall()
     conn.close()
 
-    valid_files = [row['file_path'] for row in rows if row['file_path'] and os.path.exists(row['file_path'])]
-
-    if not valid_files:
-        return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없거나, 서버 재부팅으로 파일이 유실되었습니다. 파일 재제출 후 시도해 주세요."}), 400
+    if not rows:
+        return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없습니다."}), 400
 
     try:
-        base_prs = Presentation(valid_files[0])
+        # 첫 번째 PPT 읽기
+        first_bytes = io.BytesIO(rows[0]['file_data'])
+        base_prs = Presentation(first_bytes)
 
-        for filepath in valid_files[1:]:
-            sub_prs = Presentation(filepath)
+        # 두 번째 파일부터 슬라이드 추가
+        for row in rows[1:]:
+            sub_bytes = io.BytesIO(row['file_data'])
+            sub_prs = Presentation(sub_bytes)
+            
             for slide in sub_prs.slides:
                 blank_layout = base_prs.slide_layouts[6]
                 new_slide = base_prs.slides.add_slide(blank_layout)
@@ -178,17 +176,19 @@ def merge_ppts():
                         except Exception:
                             pass
 
-        output_path = os.path.join(OUTPUT_FOLDER, 'merged_meeting_materials.pptx')
-        base_prs.save(output_path)
-        return jsonify({"success": True, "download_url": "/download/merged"})
+        output_stream = io.BytesIO()
+        base_prs.save(output_stream)
+        output_stream.seek(0)
+
+        return send_file(
+            output_stream,
+            as_attachment=True,
+            download_name="최종_회의자료_통합본.pptx",
+            mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
 
     except Exception as e:
         return jsonify({"success": False, "message": f"취합 중 오류 발생: {str(e)}"}), 500
-
-@app.route('/download/merged')
-def download_merged_file():
-    path = os.path.join(OUTPUT_FOLDER, 'merged_meeting_materials.pptx')
-    return send_file(path, as_attachment=True, download_name="최종_회의자료_통합본.pptx")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

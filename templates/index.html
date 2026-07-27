@@ -180,10 +180,9 @@
     const topic = currentTopics.find(t => t.id === topicId);
     let reason = "";
 
-    // 이미 제출된 상태이면 사유 입력 팝업 띄우기
     if (topic && (topic.status === '제출완료' || topic.status === '재제출완료')) {
       reason = prompt('재제출 사유를 간단히 입력해 주세요:');
-      if (reason === null) return; // 취소 누른 경우
+      if (reason === null) return;
     }
 
     const formData = new FormData();
@@ -205,13 +204,19 @@
   }
 
   async function mergePPTs() {
-    const res = await fetch('/api/merge', { method: 'POST' });
-    const data = await res.json();
-
-    if (data.success) {
-      window.location.href = data.download_url;
+    const response = await fetch('/api/merge', { method: 'POST' });
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "최종_회의자료_통합본.pptx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } else {
-      alert(data.message);
+      const data = await response.json();
+      alert(data.message || '다운로드 중 오류가 발생했습니다.');
     }
   }
 
