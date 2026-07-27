@@ -5,57 +5,317 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>회의자료 취합 시스템</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
-    body { background-color: #f4f6f9; padding: 30px; color: #333; }
-    .container { max-width: 1100px; margin: 0 auto; }
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; 
+    }
+
+    body { 
+      background-color: #f2f4f6; 
+      padding: 40px 20px; 
+      color: #191f28; 
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container { 
+      max-width: 1080px; 
+      margin: 0 auto; 
+    }
     
-    h1 { margin-bottom: 20px; text-align: center; color: #1e293b; }
-    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .card h2 { font-size: 1.2rem; margin-bottom: 15px; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
 
-    .date-selection { margin-bottom: 20px; max-width: 300px; }
-    .date-selection label { font-size: 0.9rem; font-weight: bold; color: #475569; display: block; margin-bottom: 6px; }
+    h1 { 
+      font-size: 1.75rem; 
+      font-weight: 700; 
+      color: #191f28; 
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: #8b95a1;
+      margin-top: 6px;
+    }
+
+    /* 토스 스타일 라운드 카드 */
+    .card { 
+      background: #ffffff; 
+      border-radius: 16px; 
+      padding: 28px; 
+      margin-bottom: 20px; 
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card h2 { 
+      font-size: 1.2rem; 
+      font-weight: 700;
+      margin-bottom: 20px; 
+      color: #333d4b; 
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .date-selection { 
+      margin-bottom: 20px; 
+      max-width: 280px; 
+    }
+
+    .date-selection label { 
+      font-size: 0.85rem; 
+      font-weight: 600; 
+      color: #6b7684; 
+      display: block; 
+      margin-bottom: 8px; 
+    }
     
-    .topic-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
-    .form-row { display: grid; grid-template-columns: 2fr 3fr auto; gap: 10px; align-items: center; }
+    .topic-item { 
+      background: #f9fafb; 
+      border: 1px solid #f2f4f6; 
+      border-radius: 12px; 
+      padding: 16px; 
+      margin-bottom: 12px; 
+    }
+
+    .form-row { 
+      display: grid; 
+      grid-template-columns: 2fr 3fr auto; 
+      gap: 12px; 
+      align-items: center; 
+    }
     
-    input[type="text"], input[type="date"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; }
-    .dept-hint { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+    input[type="text"], input[type="date"] { 
+      width: 100%; 
+      padding: 12px 14px; 
+      border: 1px solid #e5e8eb; 
+      border-radius: 10px; 
+      outline: none; 
+      font-size: 0.95rem;
+      background-color: #ffffff;
+      color: #333d4b;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
 
-    .btn-add-item { background: #64748b; color: white; padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; margin-bottom: 15px; }
-    .btn-remove-item { background: #ef4444; color: white; border: none; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; font-weight: bold; }
-    .btn-submit-all { background: #2563eb; color: white; border: none; border-radius: 6px; padding: 12px 20px; font-weight: bold; width: 100%; cursor: pointer; font-size: 1rem; }
+    input[type="text"]:focus, input[type="date"]:focus {
+      border-color: #3182f6;
+      box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+    }
 
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.88rem; }
-    th { background-color: #f8fafc; color: #475569; }
+    .dept-hint { 
+      font-size: 0.8rem; 
+      color: #8b95a1; 
+      margin-top: 6px; 
+    }
 
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; }
-    .badge-red { background-color: #fee2e2; color: #dc2626; }
-    .badge-green { background-color: #dcfce7; color: #16a34a; }
-    .badge-blue { background-color: #dbeafe; color: #2563eb; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .dot-red { background-color: #ef4444; }
-    .dot-green { background-color: #22c55e; }
-    .dot-blue { background-color: #3b82f6; }
+    /* 버튼 기본 및 클릭 애니메이션 */
+    button, .btn-download {
+      transition: all 0.15s ease-in-out;
+      cursor: pointer;
+    }
 
-    .reason-text { font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block; font-style: italic; }
+    button:active, .btn-download:active {
+      transform: scale(0.98);
+    }
 
-    .btn-download { background-color: #0284c7; color: white; text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-    .btn-delete { background-color: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+    .btn-add-item { 
+      background: #f2f4f6; 
+      color: #4e5968; 
+      padding: 10px 16px; 
+      border: none; 
+      border-radius: 10px; 
+      font-size: 0.9rem; 
+      font-weight: 600;
+      margin-bottom: 20px; 
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-add-item:hover {
+      background: #e5e8eb;
+    }
+
+    .btn-remove-item { 
+      background: #fee2e2; 
+      color: #f04452; 
+      border: none; 
+      border-radius: 8px; 
+      width: 36px; 
+      height: 36px; 
+      font-weight: 700; 
+      font-size: 1rem;
+    }
+
+    .btn-remove-item:hover {
+      background: #fdd8d8;
+    }
+
+    .btn-submit-all { 
+      background: #3182f6; 
+      color: #ffffff; 
+      border: none; 
+      border-radius: 12px; 
+      padding: 14px 20px; 
+      font-weight: 700; 
+      width: 100%; 
+      font-size: 1rem; 
+      box-shadow: 0 4px 12px rgba(49, 130, 246, 0.2);
+    }
+
+    .btn-submit-all:hover {
+      background: #1b64da;
+    }
+
+    /* 테두리 없이 시원한 토스형 테이블 */
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 8px; 
+    }
+
+    th, td { 
+      padding: 16px 12px; 
+      text-align: left; 
+      font-size: 0.9rem; 
+    }
+
+    th { 
+      color: #8b95a1; 
+      font-weight: 600;
+      border-bottom: 1px solid #f2f4f6;
+      font-size: 0.85rem;
+    }
+
+    td {
+      border-bottom: 1px solid #f9fafb;
+      color: #333d4b;
+    }
+
+    tr:hover td {
+      background-color: #f9fafb;
+    }
+
+    /* 라운드 캡슐 배지 */
+    .badge { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 6px; 
+      padding: 6px 12px; 
+      border-radius: 20px; 
+      font-size: 0.8rem; 
+      font-weight: 600; 
+    }
+
+    .badge-red { background-color: #ffeeee; color: #f04452; }
+    .badge-green { background-color: #e8f7ee; color: #02b056; }
+    .badge-blue { background-color: #e8f3ff; color: #3182f6; }
+
+    .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .dot-red { background-color: #f04452; }
+    .dot-green { background-color: #02b056; }
+    .dot-blue { background-color: #3182f6; }
+
+    .reason-text { 
+      font-size: 0.78rem; 
+      color: #8b95a1; 
+      margin-top: 4px; 
+      display: block; 
+    }
+
+    .btn-download { 
+      background-color: #e8f3ff; 
+      color: #3182f6; 
+      text-decoration: none; 
+      padding: 8px 12px; 
+      border-radius: 8px; 
+      font-size: 0.82rem; 
+      font-weight: 700; 
+      display: inline-block;
+    }
+
+    .btn-download:hover {
+      background-color: #d8e8ff;
+    }
+
+    .btn-delete { 
+      background-color: #f2f4f6; 
+      color: #6b7684; 
+      border: none; 
+      padding: 6px 10px; 
+      border-radius: 6px; 
+      font-size: 0.78rem; 
+      font-weight: 600;
+    }
+
+    .btn-delete:hover {
+      background-color: #fee2e2;
+      color: #f04452;
+    }
+
+    .btn-upload-action {
+      background-color: #3182f6;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .btn-upload-action:hover {
+      background-color: #1b64da;
+    }
     
-    .merge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
-    .btn-merge { width: 100%; padding: 14px; font-size: 1rem; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    .btn-merge-ppt { background-color: #059669; }
-    .btn-merge-ppt:hover { background-color: #047857; }
-    .btn-merge-hwp { background-color: #2563eb; }
-    .btn-merge-hwp:hover { background-color: #1d4ed8; }
+    .merge-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 16px; 
+      margin-top: 12px; 
+    }
+
+    .btn-merge { 
+      width: 100%; 
+      padding: 16px; 
+      font-size: 1rem; 
+      color: white; 
+      border: none; 
+      border-radius: 12px; 
+      font-weight: 700; 
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-merge-ppt { background-color: #02b056; }
+    .btn-merge-ppt:hover { background-color: #02974a; }
+    .btn-merge-hwp { background-color: #3182f6; }
+    .btn-merge-hwp:hover { background-color: #1b64da; }
+
+    input[type="file"]::file-selector-button {
+      background: #f2f4f6;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      color: #4e5968;
+      cursor: pointer;
+      margin-right: 8px;
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h1>📂 회의자료 취합 및 대시보드</h1>
+  <header>
+    <h1>📂 회의자료 취합 대시보드</h1>
+    <p class="subtitle">부서별 회의 안건을 등록하고 파일 통합본을 손쉽게 생성해보세요.</p>
+  </header>
 
   <div class="card">
     <h2>1. 회의 날짜 지정 및 안건/부서 다중 등록</h2>
@@ -88,7 +348,7 @@
 
   <div class="card">
     <h2>3. 회의자료 통합 파일 생성</h2>
-    <p style="color: #64748b; margin-bottom: 15px; font-size: 0.9rem;">
+    <p style="color: #8b95a1; margin-bottom: 16px; font-size: 0.9rem;">
       제출 완료된 파일들을 순서대로 자동 병합하여 하나의 통합 파일로 생성합니다.
     </p>
     <div class="merge-grid">
@@ -121,7 +381,7 @@
           <div class="dept-hint">* 쉼표(,)로 구분 시 개별 행이 생성됩니다.</div>
         </div>
         <div>
-          <button class="btn-remove-item" onclick="removeTopicRow(this)">X</button>
+          <button class="btn-remove-item" onclick="removeTopicRow(this)">✕</button>
         </div>
       </div>
     `;
@@ -194,7 +454,7 @@
   async function uploadFile(topicId) {
     const fileInput = document.getElementById(`file-${topicId}`);
     if (!fileInput.files[0]) {
-      alert('업로드할 PPT 또는 HWP 파일 선택해 주세요.');
+      alert('업로드할 PPT 또는 HWP 파일을 선택해 주세요.');
       return;
     }
 
@@ -263,7 +523,7 @@
     tbody.innerHTML = '';
 
     if (topics.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 20px;">등록된 회의 안건이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#8b95a1; padding: 32px;">등록된 회의 안건이 없습니다.</td></tr>`;
       return;
     }
 
@@ -283,7 +543,7 @@
       const isDone = topic.status === '제출완료' || topic.status === '재제출완료';
       const downloadBtn = isDone
         ? `<a href="/download/single/${topic.id}" class="btn-download">💾 다운로드</a>`
-        : `<span style="color:#cbd5e1; font-size:0.8rem;">미제출</span>`;
+        : `<span style="color:#b0b8c1; font-size:0.85rem;">미제출</span>`;
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -293,9 +553,9 @@
         <td>${statusBadge}</td>
         <td>${downloadBtn}</td>
         <td>
-          <div style="display:flex; gap: 4px;">
-            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.75rem; width:160px;">
-            <button onclick="uploadFile(${topic.id})" style="padding: 4px 8px; font-size:0.75rem; cursor:pointer;">${isDone ? '재제출' : '업로드'}</button>
+          <div style="display:flex; align-items: center; gap: 6px;">
+            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.8rem; width:170px;">
+            <button class="btn-upload-action" onclick="uploadFile(${topic.id})">${isDone ? '재제출' : '업로드'}</button>
           </div>
         </td>
         <td>
