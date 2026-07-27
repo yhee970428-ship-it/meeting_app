@@ -1,7 +1,5 @@
 import os
 import io
-import zlib
-import struct
 import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
@@ -39,6 +37,16 @@ def init_db():
                 reupload_reason TEXT
             );
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feedback (
+                id SERIAL PRIMARY KEY,
+                submit_date VARCHAR(20) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                dept VARCHAR(100) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                content TEXT NOT NULL
+            );
+        ''')
     else:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS topics (
@@ -50,6 +58,16 @@ def init_db():
                 file_data BLOB,
                 status TEXT DEFAULT '제출필요',
                 reupload_reason TEXT
+            );
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submit_date TEXT NOT NULL,
+                title TEXT NOT NULL,
+                dept TEXT NOT NULL,
+                name TEXT NOT NULL,
+                content TEXT NOT NULL
             );
         ''')
     conn.commit()
@@ -257,10 +275,8 @@ def merge_hwps():
 
     try:
         import zipfile
-        # 첫 번째 파일 기반으로 병합 스트림 생성
         first_bytes = bytes(rows[0]['file_data']) if isinstance(rows[0]['file_data'], memoryview) else rows[0]['file_data']
         
-        # HWPX (Zip 기반 구조) 병합 모드 처리
         if rows[0]['original_filename'].lower().endswith('.hwpx'):
             output_zip_buffer = io.BytesIO()
             with zipfile.ZipFile(io.BytesIO(first_bytes), 'r') as first_zip:
@@ -276,7 +292,6 @@ def merge_hwps():
                 mimetype="application/hwp+zip"
             )
         else:
-            # HWP 바이너리 파일 반환
             return send_file(
                 io.BytesIO(first_bytes),
                 as_attachment=True,
@@ -286,6 +301,45 @@ def merge_hwps():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"한글 파일 취합 중 오류 발생: {str(e)}"}), 500
+
+# 의견 제출 등록 API
+@app.route('/api/feedback', methods=['POST'])
+def add_feedback():
+    data = request.json
+    submit_date = data.get("submit_date")
+    title = data.get("title")
+    dept = data.get("dept")
+    name = data.get("name")
+    content = data.get("content")
+
+    if not all([submit_date, title, dept, name, content]):
+        return jsonify({"success": False, "message": "모든 항목을 입력해 주세요."}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO feedback (submit_date, title, dept, name, content) VALUES (%s, %s, %s, %s, %s)' if DATABASE_URL else
+        'INSERT INTO feedback (submit_date, title, dept, name, content) VALUES (?, ?, ?, ?, ?)',
+        (submit_date, title.strip(), dept.strip(), name.strip(), content.strip())
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+# 의견 제출 목록 조회 API
+@app.route('/api/feedback', methods=['GET'])
+def get_feedback():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, submit_date, title, dept, name, content FROM feedback ORDER BY id DESC')
+        rows = cursor.fetchall()
+        conn.close()
+
+        feedbacks = [dict(row) for row in rows]
+        return jsonify(feedbacks)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

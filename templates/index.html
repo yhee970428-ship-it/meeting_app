@@ -5,451 +5,448 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>회의자료 취합 시스템</title>
   <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-
     * { 
       box-sizing: border-box; 
       margin: 0; 
       padding: 0; 
-      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; 
+      font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; 
     }
 
     body { 
-      background-color: #f2f4f6; 
-      padding: 40px 20px; 
-      color: #191f28; 
-      -webkit-font-smoothing: antialiased;
+      background-color: #f4f6f9; 
+      color: #333; 
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    .container { 
-      max-width: 1080px; 
-      margin: 0 auto; 
-    } 
-    
-    header {
-      text-align: center;
-      margin-bottom: 32px;
+    /* 좌측 사이드바 (실무 인트라넷 스타일) */
+    .sidebar {
+      width: 260px;
+      background-color: #1e293b;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex-shrink: 0;
     }
 
-    h1 { 
-      font-size: 1.75rem; 
-      font-weight: 700; 
-      color: #191f28; 
+    .sidebar-header {
+      padding: 24px 20px;
+      border-bottom: 1px solid #334155;
+    }
+
+    .sidebar-header h1 {
+      font-size: 1.15rem;
+      font-weight: bold;
+      color: #f8fafc;
       letter-spacing: -0.5px;
     }
 
-    .subtitle {
+    .nav-menu {
+      list-style: none;
+      padding: 16px 0;
+    }
+
+    .nav-item {
+      padding: 14px 20px;
       font-size: 0.95rem;
-      color: #8b95a1;
-      margin-top: 6px;
+      color: #94a3b8;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-left: 4px solid transparent;
+      transition: all 0.2s;
     }
 
-    /* 토스 스타일 라운드 카드 */
-    .card { 
-      background: #ffffff; 
-      border-radius: 16px; 
-      padding: 28px; 
-      margin-bottom: 20px; 
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    .nav-item:hover {
+      background-color: #334155;
+      color: #f8fafc;
     }
 
-    .card h2 { 
-      font-size: 1.2rem; 
-      font-weight: 700;
-      margin-bottom: 20px; 
-      color: #333d4b; 
+    .nav-item.active {
+      background-color: #0f172a;
+      color: #ffffff;
+      border-left-color: #3182f6;
+      font-weight: bold;
     }
 
-    .date-selection { 
-      margin-bottom: 20px; 
-      max-width: 280px; 
+    /* 하단 항상 고정 문의처 */
+    .sidebar-contact {
+      padding: 20px;
+      border-top: 1px solid #334155;
+      background-color: #0f172a;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      line-height: 1.5;
     }
 
-    .date-selection label { 
-      font-size: 0.85rem; 
-      font-weight: 600; 
-      color: #6b7684; 
-      display: block; 
-      margin-bottom: 8px; 
-    }
-    
-    .topic-item { 
-      background: #f9fafb; 
-      border: 1px solid #f2f4f6; 
-      border-radius: 12px; 
-      padding: 16px; 
-      margin-bottom: 12px; 
+    .sidebar-contact strong {
+      color: #e2e8f0;
     }
 
-    .form-row { 
-      display: grid; 
-      grid-template-columns: 2fr 3fr auto; 
-      gap: 12px; 
-      align-items: center; 
-    }
-    
-    input[type="text"], input[type="date"], select { 
-      width: 100%; 
-      padding: 12px 14px; 
-      border: 1px solid #e5e8eb; 
-      border-radius: 10px; 
-      outline: none; 
-      font-size: 0.95rem;
-      background-color: #ffffff;
-      color: #333d4b;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    .sidebar-contact a {
+      color: #38bdf8;
+      text-decoration: none;
     }
 
-    input[type="text"]:focus, input[type="date"]:focus, select:focus {
-      border-color: #3182f6;
-      box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+    /* 메인 콘텐츠 영역 */
+    .main-content {
+      flex: 1;
+      padding: 30px;
+      overflow-y: auto;
     }
 
-    .dept-hint { 
-      font-size: 0.8rem; 
-      color: #8b95a1; 
-      margin-top: 6px; 
+    .page-section {
+      display: none;
     }
 
-    /* 필터 제어바 (엑셀 스타일 조건 검색) */
-    .filter-bar {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      background-color: #f9fafb;
-      padding: 16px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-    }
-
-    .filter-group label {
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: #6b7684;
+    .page-section.active {
       display: block;
+    }
+
+    /* 실무 패널 스타일 (과도한 AI 효과 제거) */
+    .panel {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #1e293b;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    /* 폼 요소 */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #475569;
       margin-bottom: 6px;
     }
 
-    button, .btn-download {
-      transition: all 0.15s ease-in-out;
+    input[type="text"], input[type="date"], select, textarea {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      color: #1e293b;
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #3182f6;
+    }
+
+    .topic-row {
+      display: grid;
+      grid-template-columns: 2fr 3fr auto;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+
+    /* 버튼 스타일 */
+    .btn {
+      padding: 9px 16px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      border-radius: 4px;
+      border: none;
       cursor: pointer;
     }
 
-    button:active, .btn-download:active {
-      transform: scale(0.98);
+    .btn-primary { background-color: #3182f6; color: white; }
+    .btn-primary:hover { background-color: #1d4ed8; }
+
+    .btn-secondary { background-color: #e2e8f0; color: #334155; }
+    .btn-secondary:hover { background-color: #cbd5e1; }
+
+    .btn-danger { background-color: #ef4444; color: white; }
+    .btn-danger:hover { background-color: #dc2626; }
+
+    .btn-success { background-color: #10b981; color: white; }
+    .btn-success:hover { background-color: #059669; }
+
+    /* 대시보드 조건 필터 */
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background: #f8fafc;
+      padding: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      margin-bottom: 18px;
     }
 
-    .btn-add-item { 
-      background: #f2f4f6; 
-      color: #4e5968; 
-      padding: 10px 16px; 
-      border: none; 
-      border-radius: 10px; 
-      font-size: 0.9rem; 
-      font-weight: 600;
-      margin-bottom: 20px; 
+    /* 표 (Table) 디자인 - 깔끔한 실무용 */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
     }
 
-    .btn-add-item:hover { background: #e5e8eb; }
-
-    .btn-remove-item { 
-      background: #fee2e2; 
-      color: #f04452; 
-      border: none; 
-      border-radius: 8px; 
-      width: 36px; 
-      height: 36px; 
-      font-weight: 700; 
-      font-size: 1rem;
+    th, td {
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
     }
 
-    .btn-remove-item:hover { background: #fdd8d8; }
-
-    .btn-submit-all { 
-      background: #3182f6; 
-      color: #ffffff; 
-      border: none; 
-      border-radius: 12px; 
-      padding: 14px 20px; 
-      font-weight: 700; 
-      width: 100%; 
-      font-size: 1rem; 
-      box-shadow: 0 4px 12px rgba(49, 130, 246, 0.2);
+    th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: bold;
+      border-top: 1px solid #cbd5e1;
     }
 
-    .btn-submit-all:hover { background: #1b64da; }
-
-    table { 
-      width: 100%; 
-      border-collapse: collapse; 
-      margin-top: 8px; 
+    tr:hover {
+      background-color: #f8fafc;
     }
 
-    th, td { 
-      padding: 16px 12px; 
-      text-align: left; 
-      font-size: 0.9rem; 
-    }
-
-    th { 
-      color: #8b95a1; 
-      font-weight: 600;
-      border-bottom: 1px solid #f2f4f6;
-      font-size: 0.85rem;
-    }
-
-    td {
-      border-bottom: 1px solid #f9fafb;
-      color: #333d4b;
-    }
-
-    tr:hover td { background-color: #f9fafb; }
-
-    /* 라운드 캡슐 배지 */
-    .badge { 
-      display: inline-flex; 
-      align-items: center; 
-      gap: 6px; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 0.8rem; 
-      font-weight: 600; 
-    }
-
-    .badge-red { background-color: #ffeeee; color: #f04452; }
-    .badge-green { background-color: #e8f7ee; color: #02b056; }
-    .badge-blue { background-color: #e8f3ff; color: #3182f6; }
-
-    .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-    .dot-red { background-color: #f04452; }
-    .dot-green { background-color: #02b056; }
-    .dot-blue { background-color: #3182f6; }
-
-    .reason-text { 
-      font-size: 0.78rem; 
-      color: #8b95a1; 
-      margin-top: 4px; 
-      display: block; 
-    }
-
-    .btn-download { 
-      background-color: #e8f3ff; 
-      color: #3182f6; 
-      text-decoration: none; 
-      padding: 8px 12px; 
-      border-radius: 8px; 
-      font-size: 0.82rem; 
-      font-weight: 700; 
+    /* 배지 상태 표기 */
+    .status-tag {
       display: inline-block;
-    }
-
-    .btn-download:hover { background-color: #d8e8ff; }
-
-    .btn-delete { 
-      background-color: #f2f4f6; 
-      color: #6b7684; 
-      border: none; 
-      padding: 6px 10px; 
-      border-radius: 6px; 
-      font-size: 0.78rem; 
-      font-weight: 600;
-    }
-
-    .btn-delete:hover {
-      background-color: #fee2e2;
-      color: #f04452;
-    }
-
-    .btn-upload-action {
-      background-color: #3182f6;
-      color: white;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .btn-upload-action:hover { background-color: #1b64da; }
-    
-    .merge-grid { 
-      display: grid; 
-      grid-template-columns: 1fr 1fr; 
-      gap: 16px; 
-      margin-top: 12px; 
-    }
-
-    .btn-merge { 
-      width: 100%; 
-      padding: 16px; 
-      font-size: 1rem; 
-      color: white; 
-      border: none; 
-      border-radius: 12px; 
-      font-weight: 700; 
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    }
-
-    .btn-merge-ppt { background-color: #02b056; }
-    .btn-merge-ppt:hover { background-color: #02974a; }
-    .btn-merge-hwp { background-color: #3182f6; }
-    .btn-merge-hwp:hover { background-color: #1b64da; }
-
-    input[type="file"]::file-selector-button {
-      background: #f2f4f6;
-      border: none;
-      border-radius: 6px;
       padding: 4px 8px;
-      font-size: 0.75rem;
-      color: #4e5968;
-      cursor: pointer;
-      margin-right: 8px;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: bold;
     }
 
-    /* 하단 문의처 푸터 카드의 전용 스타일 */
-    .contact-card {
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 20px 28px;
-      text-align: center;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-      font-size: 0.92rem;
-      color: #4e5968;
+    .tag-red { background-color: #fee2e2; color: #dc2626; }
+    .tag-green { background-color: #d1fae5; color: #059669; }
+    .tag-blue { background-color: #dbeafe; color: #2563eb; }
+
+    /* 통합 다운로드 구역 */
+    .merge-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 12px;
     }
 
-    .contact-card strong {
-      color: #191f28;
+    .merge-box .btn {
+      padding: 14px;
+      font-size: 0.95rem;
     }
 
-    .contact-card a {
-      color: #3182f6;
-      text-decoration: none;
+    /* 의견 상세 Modal/Accordion 대신 깔끔한 텍스트 */
+    .feedback-content-preview {
+      font-size: 0.82rem;
+      color: #64748b;
+      margin-top: 4px;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <header>
-    <h1>📂 회의자료 취합 대시보드</h1>
-    <p class="subtitle">부서별 회의 안건을 등록하고 파일 통합본을 손쉽게 생성해보세요.</p>
-  </header>
-
-  <!-- 1. 회의 안건 목차 추가 -->
-  <div class="card">
-    <h2>회의 안건 목차 추가</h2>
-    <div class="date-selection">
-      <label>회의 날짜 선택</label>
-      <input type="date" id="meetingDate">
-    </div>
-    <div id="topicContainer"></div>
-    <button class="btn-add-item" onclick="addTopicRow()">+ 안건 목차 추가하기</button>
-    <button class="btn-submit-all" onclick="submitTopics()">회의 안건 전체 등록하기</button>
-  </div>
-
-  <!-- 2. 부서별 제출 현황 대시보드 (조건별 조회 필터 적용) -->
-  <div class="card">
-    <h2>부서별 제출 현황 대시보드</h2>
-    
-    <!-- 조건부서식 검색 필터 -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label>📅 회의 날짜</label>
-        <select id="filterDate" onchange="applyFilters()">
-          <option value="">전체 날짜</option>
-        </select>
+  <!-- 좌측 사이드바 -->
+  <div class="sidebar">
+    <div>
+      <div class="sidebar-header">
+        <h1>📂 회의자료 취합 시스템</h1>
       </div>
-      <div class="filter-group">
-        <label>📌 안건 목차</label>
-        <select id="filterTitle" onchange="applyFilters()">
-          <option value="">전체 목차</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label>🏢 제출 부서</label>
-        <select id="filterDept" onchange="applyFilters()">
-          <option value="">전체 부서</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label>💡 제출 상태</label>
-        <select id="filterStatus" onchange="applyFilters()">
-          <option value="">전체 상태</option>
-          <option value="제출필요">제출필요</option>
-          <option value="제출완료">제출완료</option>
-          <option value="재제출완료">재제출완료</option>
-        </select>
-      </div>
+      <ul class="nav-menu">
+        <li class="nav-item active" onclick="switchTab('tab-dashboard')">
+          📊 부서별 제출 현황 대시보드
+        </li>
+        <li class="nav-item" onclick="switchTab('tab-add')">
+          ➕ 회의 안건 목차 추가
+        </li>
+        <li class="nav-item" onclick="switchTab('tab-feedback')">
+          💬 의견 제출 게시판
+        </li>
+      </ul>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>회의 날짜</th>
-          <th>안건 목차</th>
-          <th>제출 부서</th>
-          <th>제출 상태 / 사유</th>
-          <th>개별 다운로드</th>
-          <th>자료 업로드 (PPT, HWP)</th>
-          <th>관리</th>
-        </tr>
-      </thead>
-      <tbody id="topicTableBody"></tbody>
-    </table>
-  </div>
-
-  <!-- 3. 회의자료 통합 파일 생성 -->
-  <div class="card">
-    <h2>회의자료 통합 파일 생성</h2>
-    <p style="color: #8b95a1; margin-bottom: 16px; font-size: 0.9rem;">
-      제출 완료된 파일들을 순서대로 자동 병합하여 하나의 통합 파일로 생성합니다.
-    </p>
-    <div class="merge-grid">
-      <button class="btn-merge btn-merge-ppt" onclick="mergePPTs()">📊 PPT 통합본 다운로드</button>
-      <button class="btn-merge btn-merge-hwp" onclick="mergeHWPs()">📝 한글(HWP) 통합본 다운로드</button>
+    <!-- 맨 아래 고정 문의처 -->
+    <div class="sidebar-contact">
+      <div style="margin-bottom: 4px;"><strong>[시스템 문의처]</strong></div>
+      하연희 주임연구원<br>
+      Tel. <strong>031-470-1638</strong><br>
+      E-mail. <a href="mailto:yhee@ktc.re.kr">yhee@ktc.re.kr</a>
     </div>
   </div>
 
-  <!-- 하단 문의처 -->
-  <div class="contact-card">
-    문의처 : <strong>하연희 주임연구원</strong> (Tel. <strong>031-470-1638</strong>, E-mail. <a href="mailto:yhee@ktc.re.kr">yhee@ktc.re.kr</a>)
+  <!-- 우측 메인 콘텐츠 -->
+  <div class="main-content">
+
+    <!-- 1. 부서별 제출 현황 대시보드 + 통합본 생성 창 -->
+    <div id="tab-dashboard" class="page-section active">
+      <div class="panel">
+        <div class="panel-title">부서별 제출 현황 대시보드</div>
+        
+        <!-- 엑셀 스타일 조건별 조회 필터 -->
+        <div class="filter-grid">
+          <div>
+            <label>📅 회의 날짜</label>
+            <select id="filterDate" onchange="applyFilters()">
+              <option value="">전체 날짜</option>
+            </select>
+          </div>
+          <div>
+            <label>📌 안건 목차</label>
+            <select id="filterTitle" onchange="applyFilters()">
+              <option value="">전체 목차</option>
+            </select>
+          </div>
+          <div>
+            <label>🏢 제출 부서</label>
+            <select id="filterDept" onchange="applyFilters()">
+              <option value="">전체 부서</option>
+            </select>
+          </div>
+          <div>
+            <label>💡 제출 상태</label>
+            <select id="filterStatus" onchange="applyFilters()">
+              <option value="">전체 상태</option>
+              <option value="제출필요">제출필요</option>
+              <option value="제출완료">제출완료</option>
+              <option value="재제출완료">재제출완료</option>
+            </select>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>회의 날짜</th>
+              <th>안건 목차</th>
+              <th>제출 부서</th>
+              <th>제출 상태 / 사유</th>
+              <th>다운로드</th>
+              <th>파일 업로드 (PPT, HWP)</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="topicTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">회의자료 통합 파일 생성</div>
+        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 12px;">
+          제출 완료된 파일들을 순서대로 자동 병합하여 하나의 통합 파일로 생성합니다.
+        </p>
+        <div class="merge-box">
+          <button class="btn btn-success" onclick="mergePPTs()">📊 PPT 통합본 다운로드</button>
+          <button class="btn btn-primary" onclick="mergeHWPs()">📝 한글(HWP) 통합본 다운로드</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 회의 안건 목차 추가 창 -->
+    <div id="tab-add" class="page-section">
+      <div class="panel">
+        <div class="panel-title">회의 안건 목차 추가</div>
+        <div class="form-group" style="max-width: 250px;">
+          <label>회의 날짜 선택</label>
+          <input type="date" id="meetingDate">
+        </div>
+        <div id="topicContainer"></div>
+        <button class="btn btn-secondary" onclick="addTopicRow()" style="margin-bottom: 20px;">+ 목차 항목 추가</button>
+        <button class="btn btn-primary" onclick="submitTopics()" style="width: 100%;">회의 안건 전체 등록</button>
+      </div>
+    </div>
+
+    <!-- 3. 의견 제출 게시판 창 -->
+    <div id="tab-feedback" class="page-section">
+      <div class="panel">
+        <div class="panel-title">의견 제출하기</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div>
+            <label>작성 날짜</label>
+            <input type="date" id="fbDate">
+          </div>
+          <div>
+            <label>소속 부서명</label>
+            <input type="text" id="fbDept" placeholder="예: 기획팀">
+          </div>
+          <div>
+            <label>작성자 성명</label>
+            <input type="text" id="fbName" placeholder="예: 홍길동">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>의견 제목</label>
+          <input type="text" id="fbTitle" placeholder="의견 제목을 입력해 주세요.">
+        </div>
+        <div class="form-group">
+          <label>상세 의견 내용</label>
+          <textarea id="fbContent" rows="4" placeholder="개선 사항이나 요청 내용을 자유롭게 작성해 주세요."></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="submitFeedback()" style="width: 100%;">의견 등록하기</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">등록된 의견 목록</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 120px;">작성 날짜</th>
+              <th style="width: 120px;">부서명</th>
+              <th style="width: 100px;">작성자</th>
+              <th>제목 및 내용</th>
+            </tr>
+          </thead>
+          <tbody id="feedbackTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
-</div>
 
 <script>
   let currentTopics = [];
 
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('meetingDate').valueAsDate = new Date();
+    document.getElementById('fbDate').valueAsDate = new Date();
     addTopicRow();
     fetchTopics();
+    fetchFeedback();
   });
 
+  // 메뉴 탭 전환 함수
+  function switchTab(tabId) {
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+
+    event.currentTarget.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+  }
+
+  /* --- 안건 등록 관련 --- */
   function addTopicRow() {
     const container = document.getElementById('topicContainer');
     const div = document.createElement('div');
-    div.className = 'topic-item';
+    div.className = 'topic-row';
     div.innerHTML = `
-      <div class="form-row">
-        <div>
-          <input type="text" class="topic-title" placeholder="안건/목차 제목 (예: 3분기 실적 보고)">
-        </div>
-        <div>
-          <input type="text" class="topic-depts" placeholder="제출 대상 부서 (쉼표 구분: 기획팀, 재무팀)">
-          <div class="dept-hint">* 쉼표(,)로 구분 시 개별 행이 생성됩니다.</div>
-        </div>
-        <div>
-          <button class="btn-remove-item" onclick="removeTopicRow(this)">✕</button>
-        </div>
-      </div>
+      <input type="text" class="topic-title" placeholder="안건/목차 제목">
+      <input type="text" class="topic-depts" placeholder="제출 부서 (쉼표 구분: 기획팀, 재무팀)">
+      <button class="btn btn-danger" onclick="removeTopicRow(this)">✕</button>
     `;
     container.appendChild(div);
   }
 
   function removeTopicRow(btn) {
-    const rows = document.querySelectorAll('.topic-item');
+    const rows = document.querySelectorAll('.topic-row');
     if (rows.length > 1) {
-      btn.closest('.topic-item').remove();
+      btn.closest('.topic-row').remove();
     } else {
       alert('최소 하나의 안건은 작성해야 합니다.');
     }
@@ -457,13 +454,10 @@
 
   async function submitTopics() {
     const meetingDate = document.getElementById('meetingDate').value;
-    if (!meetingDate) {
-      alert('회의 날짜를 선택해 주세요.');
-      return;
-    }
+    if (!meetingDate) return alert('회의 날짜를 선택해 주세요.');
 
     const items = [];
-    document.querySelectorAll('.topic-item').forEach(row => {
+    document.querySelectorAll('.topic-row').forEach(row => {
       const title = row.querySelector('.topic-title').value.trim();
       const deptsStr = row.querySelector('.topic-depts').value.trim();
       if (title && deptsStr) {
@@ -472,10 +466,7 @@
       }
     });
 
-    if (items.length === 0) {
-      alert('최소 하나 이상의 안건 제목과 부서를 입력해 주세요.');
-      return;
-    }
+    if (items.length === 0) return alert('안건 제목과 부서를 입력해 주세요.');
 
     const res = await fetch('/api/topics', {
       method: 'POST',
@@ -485,13 +476,15 @@
 
     const data = await res.json();
     if (data.success) {
-      alert('안건이 성공적으로 등록되었습니다.');
+      alert('안건이 등록되었습니다.');
       document.getElementById('topicContainer').innerHTML = '';
       addTopicRow();
       fetchTopics();
+      switchTab('tab-dashboard');
     }
   }
 
+  /* --- 대시보드 관련 --- */
   async function fetchTopics() {
     const res = await fetch('/api/topics');
     currentTopics = await res.json();
@@ -499,7 +492,6 @@
     applyFilters();
   }
 
-  // 필터 셀렉트박스 옵션 자동 채우기
   function populateFilterOptions(topics) {
     const dateSelect = document.getElementById('filterDate');
     const titleSelect = document.getElementById('filterTitle');
@@ -522,7 +514,6 @@
     deptSelect.value = selectedDept;
   }
 
-  // 필터 조건 적용하여 테이블 렌더링
   function applyFilters() {
     const fDate = document.getElementById('filterDate').value;
     const fTitle = document.getElementById('filterTitle').value;
@@ -540,29 +531,59 @@
     renderTable(filtered);
   }
 
-  async function deleteTopic(topicId) {
-    if (!confirm('정말 이 안건을 삭제하시겠습니까?')) return;
-    const res = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (data.success) {
-      fetchTopics();
-    } else {
-      alert('삭제 중 오류가 발생했습니다.');
+  function renderTable(topics) {
+    const tbody = document.getElementById('topicTableBody');
+    tbody.innerHTML = '';
+
+    if (topics.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 20px;">등록 및 조회된 안건이 없습니다.</td></tr>`;
+      return;
     }
+
+    topics.forEach(topic => {
+      let statusBadge = `<span class="status-tag tag-red">제출필요</span>`;
+      if (topic.status === '제출완료') statusBadge = `<span class="status-tag tag-green">제출완료</span>`;
+      else if (topic.status === '재제출완료') statusBadge = `<span class="status-tag tag-blue">재제출완료</span>`;
+
+      if (topic.reupload_reason) {
+        statusBadge += `<div style="font-size:0.75rem; color:#64748b; margin-top:2px;">사유: ${topic.reupload_reason}</div>`;
+      }
+
+      const isDone = topic.status === '제출완료' || topic.status === '재제출완료';
+      const downloadBtn = isDone
+        ? `<a href="/download/single/${topic.id}" class="btn btn-secondary" style="font-size:0.78rem; text-decoration:none;">💾 다운로드</a>`
+        : `<span style="color:#cbd5e1; font-size:0.8rem;">미제출</span>`;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${topic.meeting_date}</td>
+        <td><strong>${topic.title}</strong></td>
+        <td>${topic.dept}</td>
+        <td>${statusBadge}</td>
+        <td>${downloadBtn}</td>
+        <td>
+          <div style="display:flex; gap: 4px;">
+            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.75rem; width:150px;">
+            <button class="btn btn-primary" onclick="uploadFile(${topic.id})" style="padding:4px 8px; font-size:0.75rem;">${isDone ? '재제출' : '업로드'}</button>
+          </div>
+        </td>
+        <td>
+          <button class="btn btn-danger" onclick="deleteTopic(${topic.id})" style="padding:4px 8px; font-size:0.75rem;">삭제</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 
   async function uploadFile(topicId) {
     const fileInput = document.getElementById(`file-${topicId}`);
-    if (!fileInput.files[0]) {
-      alert('업로드할 PPT 또는 HWP 파일을 선택해 주세요.');
-      return;
-    }
+    if (!fileInput.files[0]) return alert('파일을 선택해 주세요.');
 
     const topic = currentTopics.find(t => t.id === topicId);
     let reason = "";
 
     if (topic && (topic.status === '제출완료' || topic.status === '재제출완료')) {
-      reason = prompt('재제출 사유를 간단히 입력해 주세요:');
+      reason = prompt('재제출 사유를 입력해 주세요:');
       if (reason === null) return;
     }
 
@@ -570,18 +591,21 @@
     formData.append('file', fileInput.files[0]);
     formData.append('reason', reason);
 
-    const res = await fetch(`/api/upload/${topicId}`, {
-      method: 'POST',
-      body: formData
-    });
-
+    const res = await fetch(`/api/upload/${topicId}`, { method: 'POST', body: formData });
     const data = await res.json();
     if (data.success) {
-      alert('파일이 성공적으로 제출되었습니다.');
+      alert('제출되었습니다.');
       fetchTopics();
     } else {
       alert(data.message);
     }
+  }
+
+  async function deleteTopic(topicId) {
+    if (!confirm('정말 삭제하시겠습니까?')) return;
+    const res = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) fetchTopics();
   }
 
   async function mergePPTs() {
@@ -592,9 +616,7 @@
       const a = document.createElement('a');
       a.href = url;
       a.download = "최종_회의자료_통합본.pptx";
-      document.body.appendChild(a);
       a.click();
-      a.remove();
     } else {
       const data = await response.json();
       alert(data.message || 'PPT 취합 중 오류가 발생했습니다.');
@@ -609,57 +631,60 @@
       const a = document.createElement('a');
       a.href = url;
       a.download = "최종_회의자료_통합본.hwpx";
-      document.body.appendChild(a);
       a.click();
-      a.remove();
     } else {
       const data = await response.json();
       alert(data.message || '한글 파일 취합 중 오류가 발생했습니다.');
     }
   }
 
-  function renderTable(topics) {
-    const tbody = document.getElementById('topicTableBody');
+  /* --- 의견 제출 게시판 관련 --- */
+  async function submitFeedback() {
+    const submit_date = document.getElementById('fbDate').value;
+    const dept = document.getElementById('fbDept').value.trim();
+    const name = document.getElementById('fbName').value.trim();
+    const title = document.getElementById('fbTitle').value.trim();
+    const content = document.getElementById('fbContent').value.trim();
+
+    if (!submit_date || !dept || !name || !title || !content) {
+      return alert('모든 항목을 작성해 주세요.');
+    }
+
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submit_date, dept, name, title, content })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('의견이 등록되었습니다.');
+      document.getElementById('fbTitle').value = '';
+      document.getElementById('fbContent').value = '';
+      fetchFeedback();
+    }
+  }
+
+  async function fetchFeedback() {
+    const res = await fetch('/api/feedback');
+    const feedbacks = await res.json();
+    const tbody = document.getElementById('feedbackTableBody');
     tbody.innerHTML = '';
 
-    if (topics.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#8b95a1; padding: 32px;">조회된 회의 안건이 없습니다.</td></tr>`;
+    if (feedbacks.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:20px;">등록된 의견이 없습니다.</td></tr>`;
       return;
     }
 
-    topics.forEach(topic => {
-      let statusBadge = `<span class="badge badge-red"><span class="dot dot-red"></span>제출필요</span>`;
-      
-      if (topic.status === '제출완료') {
-        statusBadge = `<span class="badge badge-green"><span class="dot dot-green"></span>제출완료</span>`;
-      } else if (topic.status === '재제출완료') {
-        statusBadge = `<span class="badge badge-blue"><span class="dot dot-blue"></span>재제출완료</span>`;
-      }
-
-      if (topic.reupload_reason) {
-        statusBadge += `<span class="reason-text">사유: ${topic.reupload_reason}</span>`;
-      }
-
-      const isDone = topic.status === '제출완료' || topic.status === '재제출완료';
-      const downloadBtn = isDone
-        ? `<a href="/download/single/${topic.id}" class="btn-download">💾 다운로드</a>`
-        : `<span style="color:#b0b8c1; font-size:0.85rem;">미제출</span>`;
-
+    feedbacks.forEach(fb => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${topic.meeting_date}</td>
-        <td><strong>${topic.title}</strong></td>
-        <td>${topic.dept}</td>
-        <td>${statusBadge}</td>
-        <td>${downloadBtn}</td>
+        <td>${fb.submit_date}</td>
+        <td>${fb.dept}</td>
+        <td>${fb.name}</td>
         <td>
-          <div style="display:flex; align-items: center; gap: 6px;">
-            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.8rem; width:170px;">
-            <button class="btn-upload-action" onclick="uploadFile(${topic.id})">${isDone ? '재제출' : '업로드'}</button>
-          </div>
-        </td>
-        <td>
-          <button class="btn-delete" onclick="deleteTopic(${topic.id})">삭제</button>
+          <strong style="color:#1e293b;">${fb.title}</strong>
+          <div class="feedback-content-preview">${fb.content}</div>
         </td>
       `;
       tbody.appendChild(tr);
