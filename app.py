@@ -14,7 +14,7 @@ DB_FILE = 'meeting_data.db'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# 데이터베이스 초기화 (새로고침 시 데이터 유지)
+# DB 초기화
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -26,7 +26,8 @@ def init_db():
             dept TEXT NOT NULL,
             file_path TEXT,
             original_filename TEXT,
-            status TEXT DEFAULT '제출필요'
+            status TEXT DEFAULT '제출필요',
+            reupload_reason TEXT
         )
     ''')
     conn.commit()
@@ -43,22 +44,22 @@ def get_db_connection():
 def index():
     return render_template('index.html')
 
-# 1. 안건 등록 (날짜 1개 + 안건 여러 개 + 부서 여러 개 다중 추가 지원)
+# 안건 등록
 @app.route('/api/topics', methods=['POST'])
 def add_topics():
     data = request.json
     meeting_date = data.get("meeting_date")
-    items = data.get("items", []) # [{title: "안건1", depts: ["기획팀", "재무팀"]}, ...]
+    items = data.get("items", [])
 
     if not meeting_date or not items:
-        return jsonify({"success": False, "message": "날짜와 안건 정보를 모두 입력해 주세요."}), 400
+        return jsonify({"success": False, "message": "날짜와 안건 정보를 입력해 주세요."}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     for item in items:
         title = item.get("title")
-        depts = item.get("depts", []) # 배열 형태
+        depts = item.get("depts", [])
         for dept in depts:
             if title and dept:
                 cursor.execute(
@@ -70,7 +71,7 @@ def add_topics():
     conn.close()
     return jsonify({"success": True})
 
-# 2. 안건 목록 및 대시보드 조회
+# 안건 목록 조회
 @app.route('/api/topics', methods=['GET'])
 def get_topics():
     conn = get_db_connection()
@@ -82,13 +83,15 @@ def get_topics():
     topics = [dict(row) for row in rows]
     return jsonify(topics)
 
-# 3. 파일 업로드
+# 파일 업로드 (재제출 사유 포함)
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
         return jsonify({"success": False, "message": "파일이 없습니다."}), 400
 
     file = request.files['file']
+    reason = request.form.get('reason', '')
+
     if file.filename == '':
         return jsonify({"success": False, "message": "선택된 파일이 없습니다."}), 400
 
@@ -101,19 +104,27 @@ def upload_file(topic_id):
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
 
-    # DB 업데이트
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # 기존 상태 확인
+    cursor.execute('SELECT status FROM topics WHERE id = ?', (topic_id,))
+    row = cursor.fetchone()
+    
+    status = "제출완료"
+    if row and row['status'] == '제출완료':
+        status = "재제출완료"
+
     cursor.execute(
-        'UPDATE topics SET file_path = ?, original_filename = ?, status = ? WHERE id = ?',
-        (filepath, original_filename, "제출완료", topic_id)
+        'UPDATE topics SET file_path = ?, original_filename = ?, status = ?, reupload_reason = ? WHERE id = ?',
+        (filepath, original_filename, status, reason, topic_id)
     )
     conn.commit()
     conn.close()
 
     return jsonify({"success": True})
 
-# 4. 개별 업로드 파일 다운로드
+# 개별 다운로드
 @app.route('/download/single/<int:topic_id>')
 def download_single_file(topic_id):
     conn = get_db_connection()
@@ -124,21 +135,21 @@ def download_single_file(topic_id):
 
     if row and row['file_path'] and os.path.exists(row['file_path']):
         return send_file(row['file_path'], as_attachment=True, download_name=row['original_filename'])
-    return "파일을 찾을 수 없습니다.", 404
+    return "파일을 찾을 수 없습니다. (서버 재부팅으로 인해 파일이 유실되었을 수 있으니 다시 제출해 주세요.)", 404
 
-# 5. PPT 자동 병합 및 다운로드
+# PPT 자동 병합
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT file_path FROM topics WHERE status = "제출완료" AND file_path IS NOT NULL ORDER BY id ASC')
+    cursor.execute('SELECT file_path FROM topics WHERE status IN ("제출완료", "재제출완료") AND file_path IS NOT NULL ORDER BY id ASC')
     rows = cursor.fetchall()
     conn.close()
 
-    valid_files = [row['file_path'] for row in rows if os.path.exists(row['file_path'])]
+    valid_files = [row['file_path'] for row in rows if row['file_path'] and os.path.exists(row['file_path'])]
 
     if not valid_files:
-        return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없습니다."}), 400
+        return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없거나, 서버 재부팅으로 파일이 유실되었습니다. 파일 재제출 후 시도해 주세요."}), 400
 
     try:
         base_prs = Presentation(valid_files[0])
