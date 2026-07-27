@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회의자료 취합 시스템</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
+    body { background-color: #f4f6f9; padding: 30px; color: #333; }
+    .container { max-width: 1050px; margin: 0 auto; }
+    
+    h1 { margin-bottom: 20px; text-align: center; color: #1e293b; }
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    .card h2 { font-size: 1.2rem; margin-bottom: 15px; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
+
+    /* 입력 폼 스타일 */
+    .date-selection { margin-bottom: 20px; max-width: 300px; }
+    .date-selection label { font-size: 0.9rem; font-weight: bold; color: #475569; display: block; margin-bottom: 6px; }
+    
+    .topic-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
+    .form-row { display: grid; grid-template-columns: 2fr 3fr auto; gap: 10px; align-items: center; margin-bottom: 8px; }
+    
+    input[type="text"], input[type="date"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; }
+    .dept-hint { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+
+    .btn-add-item { background: #64748b; color: white; padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; margin-bottom: 15px; }
+    .btn-remove-item { background: #ef4444; color: white; border: none; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; font-weight: bold; }
+    .btn-submit-all { background: #2563eb; color: white; border: none; border-radius: 6px; padding: 12px 20px; font-weight: bold; width: 100%; cursor: pointer; font-size: 1rem; }
+
+    /* 대시보드 테이블 */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+    th { background-color: #f8fafc; color: #475569; }
+
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
+    .badge-red { background-color: #fee2e2; color: #dc2626; }
+    .badge-green { background-color: #dcfce7; color: #16a34a; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .dot-red { background-color: #ef4444; }
+    .dot-green { background-color: #22c55e; }
+
+    .btn-download { background-color: #0284c7; color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block; }
+    .btn-merge { width: 100%; background-color: #059669; padding: 14px; font-size: 1.1rem; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .btn-merge:hover { background-color: #047857; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>📂 회의자료 취합 및 대시보드</h1>
+
+  <!-- 1. 안건 등록 폼 -->
+  <div class="card">
+    <h2>1. 회의 날짜 지정 및 안건/부서 다중 등록</h2>
+    
+    <div class="date-selection">
+      <label>회의 날짜 선택</label>
+      <input type="date" id="meetingDate">
+    </div>
+
+    <div id="topicContainer">
+      <!-- 안건 등록 카드가 동적으로 추가됨 -->
+    </div>
+
+    <button class="btn-add-item" onclick="addTopicRow()">+ 안건 목차 추가하기</button>
+    <button class="btn-submit-all" onclick="submitTopics()">회의 안건 전체 등록하기</button>
+  </div>
+
+  <!-- 2. 대시보드 및 자료 다운로드/업로드 -->
+  <div class="card">
+    <h2>2. 부서별 제출 현황 대시보드</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>회의 날짜</th>
+          <th>안건 목차</th>
+          <th>제출 부서</th>
+          <th>제출 상태</th>
+          <th>개별 파일 다운로드</th>
+          <th>자료 업로드</th>
+        </tr>
+      </thead>
+      <tbody id="topicTableBody">
+        <!-- 동적 렌더링 -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 3. 통합 다운로드 -->
+  <div class="card">
+    <h2>3. 회의자료 통합 파일 생성</h2>
+    <p style="color: #64748b; margin-bottom: 15px; font-size: 0.9rem;">
+      제출 완료(초록불)된 파일들을 순서대로 자동 병합하여 하나의 PPT 파일로 생성합니다.
+    </p>
+    <button class="btn-merge" onclick="mergePPTs()">하나의 PPT로 병합하여 다운로드</button>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // 오늘 날짜 기본 세팅
+    document.getElementById('meetingDate').valueAsDate = new Date();
+    addTopicRow(); // 기본 1개 안건 폼 표시
+    fetchTopics(); // 데이터베이스 안건 가져오기
+  });
+
+  // 안건 입력 행 추가
+  function addTopicRow() {
+    const container = document.getElementById('topicContainer');
+    const div = document.createElement('div');
+    div.className = 'topic-item';
+    div.innerHTML = `
+      <div class="form-row">
+        <div>
+          <input type="text" class="topic-title" placeholder="안건/목차 제목 (예: 3분기 실적 보고)">
+        </div>
+        <div>
+          <input type="text" class="topic-depts" placeholder="제출 대상 부서 (쉼표로 구분: 기획팀, 재무팀, 인사팀)">
+          <div class="dept-hint">* 쉼표(,)로 구분하면 해당 부서들이 각각 개별 목록으로 생성됩니다.</div>
+        </div>
+        <div>
+          <button class="btn-remove-item" onclick="removeTopicRow(this)">X</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(div);
+  }
+
+  function removeTopicRow(btn) {
+    const rows = document.querySelectorAll('.topic-item');
+    if (rows.length > 1) {
+      btn.closest('.topic-item').remove();
+    } else {
+      alert('최소 하나의 안건은 작성해야 합니다.');
+    }
+  }
+
+  // 안건 등록 요청
+  async function submitTopics() {
+    const meetingDate = document.getElementById('meetingDate').value;
+    if (!meetingDate) {
+      alert('회의 날짜를 선택해 주세요.');
+      return;
+    }
+
+    const items = [];
+    const topicRows = document.querySelectorAll('.topic-item');
+
+    topicRows.forEach(row => {
+      const title = row.querySelector('.topic-title').value.trim();
+      const deptsStr = row.querySelector('.topic-depts').value.trim();
+
+      if (title && deptsStr) {
+        // 쉼표 단위로 부서 분리
+        const depts = deptsStr.split(',').map(d => d.trim()).filter(d => d !== '');
+        items.push({ title, depts });
+      }
+    });
+
+    if (items.length === 0) {
+      alert('최소 하나 이상의 안건 제목과 부서를 입력해 주세요.');
+      return;
+    }
+
+    const res = await fetch('/api/topics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meeting_date: meetingDate, items })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('안건이 성공적으로 등록되었습니다.');
+      // 폼 초기화
+      document.getElementById('topicContainer').innerHTML = '';
+      addTopicRow();
+      fetchTopics();
+    }
+  }
+
+  // 안건 목록 불러오기 (DB 조회)
+  async function fetchTopics() {
+    const res = await fetch('/api/topics');
+    const topics = await res.json();
+    renderTable(topics);
+  }
+
+  // 파일 업로드
+  async function uploadFile(topicId) {
+    const fileInput = document.getElementById(`file-${topicId}`);
+    if (!fileInput.files[0]) {
+      alert('업로드할 PPT 파일을 선택해 주세요.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    const res = await fetch(`/api/upload/${topicId}`, {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('파일이 제출되었습니다.');
+      fetchTopics();
+    } else {
+      alert(data.message);
+    }
+  }
+
+  // PPT 병합 요청
+  async function mergePPTs() {
+    const res = await fetch('/api/merge', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      window.location.href = data.download_url;
+    } else {
+      alert(data.message);
+    }
+  }
+
+  // 테이블 그려주기
+  function renderTable(topics) {
+    const tbody = document.getElementById('topicTableBody');
+    tbody.innerHTML = '';
+
+    if (topics.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 20px;">등록된 회의 안건이 없습니다. 상단에서 등록해 주세요.</td></tr>`;
+      return;
+    }
+
+    topics.forEach(topic => {
+      const isDone = topic.status === '제출완료';
+      const statusBadge = isDone 
+        ? `<span class="badge badge-green"><span class="dot dot-green"></span>제출완료</span>`
+        : `<span class="badge badge-red"><span class="dot dot-red"></span>제출필요</span>`;
+
+      const downloadBtn = isDone
+        ? `<a href="/download/single/${topic.id}" class="btn-download">💾 파일 다운로드</a>`
+        : `<span style="color:#cbd5e1; font-size:0.8rem;">미제출</span>`;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${topic.meeting_date}</td>
+        <td><strong>${topic.title}</strong></td>
+        <td>${topic.dept}</td>
+        <td>${statusBadge}</td>
+        <td>${downloadBtn}</td>
+        <td>
+          <div style="display:flex; gap: 4px;">
+            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx" style="font-size:0.75rem; width:160px;">
+            <button onclick="uploadFile(${topic.id})" style="padding: 4px 8px; font-size:0.75rem; cursor:pointer;">업로드</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+</script>
+
+</body>
+</html>
