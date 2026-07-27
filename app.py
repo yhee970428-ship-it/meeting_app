@@ -1,44 +1,56 @@
 import os
-import sqlite3
 import io
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import Flask, render_template, request, jsonify, send_file
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 app = Flask(__name__)
 
-DB_FILE = 'meeting_data.db'
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if DATABASE_URL:
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return conn
+    else:
+        # 로컬 테스트용 SQLite 백업
+        import sqlite3
+        conn = sqlite3.connect('meeting_data.db')
+        conn.row_factory = sqlite3.Row
+        return conn
 
-# DB 초기화 및 최신 컬럼 강제 보장
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS topics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            meeting_date TEXT NOT NULL,
-            title TEXT NOT NULL,
-            dept TEXT NOT NULL,
-            original_filename TEXT,
-            file_data BLOB,
-            status TEXT DEFAULT '제출필요',
-            reupload_reason TEXT
-        )
-    ''')
-    
-    cursor.execute("PRAGMA table_info(topics)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if 'file_data' not in columns:
-        cursor.execute("ALTER TABLE topics ADD COLUMN file_data BLOB")
-    if 'reupload_reason' not in columns:
-        cursor.execute("ALTER TABLE topics ADD COLUMN reupload_reason TEXT")
-        
+    if DATABASE_URL:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS topics (
+                id SERIAL PRIMARY KEY,
+                meeting_date VARCHAR(20) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                dept VARCHAR(100) NOT NULL,
+                original_filename VARCHAR(255),
+                file_data BYTEA,
+                status VARCHAR(50) DEFAULT '제출필요',
+                reupload_reason TEXT
+            );
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                meeting_date TEXT NOT NULL,
+                title TEXT NOT NULL,
+                dept TEXT NOT NULL,
+                original_filename TEXT,
+                file_data BLOB,
+                status TEXT DEFAULT '제출필요',
+                reupload_reason TEXT
+            );
+        ''')
     conn.commit()
     conn.close()
 
@@ -46,7 +58,10 @@ init_db()
 
 @app.before_request
 def ensure_db():
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        pass
 
 @app.route('/')
 def index():
@@ -71,6 +86,7 @@ def add_topics():
         for dept in depts:
             if title and dept:
                 cursor.execute(
+                    'INSERT INTO topics (meeting_date, title, dept) VALUES (%s, %s, %s)' if DATABASE_URL else
                     'INSERT INTO topics (meeting_date, title, dept) VALUES (?, ?, ?)',
                     (meeting_date, title.strip(), dept.strip())
                 )
@@ -94,6 +110,19 @@ def get_topics():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# 안건 삭제
+@app.route('/api/topics/<int:topic_id>', methods=['DELETE'])
+def delete_topic(topic_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM topics WHERE id = %s' if DATABASE_URL else 'DELETE FROM topics WHERE id = ?', (topic_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 # 파일 업로드
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
@@ -115,17 +144,24 @@ def upload_file(topic_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT status FROM topics WHERE id = ?', (topic_id,))
+    cursor.execute('SELECT status FROM topics WHERE id = %s' if DATABASE_URL else 'SELECT status FROM topics WHERE id = ?', (topic_id,))
     row = cursor.fetchone()
     
     status = "제출완료"
     if row and row['status'] in ['제출완료', '재제출완료']:
         status = "재제출완료"
 
-    cursor.execute(
-        'UPDATE topics SET original_filename = ?, file_data = ?, status = ?, reupload_reason = ? WHERE id = ?',
-        (original_filename, file_bytes, status, reason, topic_id)
-    )
+    if DATABASE_URL:
+        cursor.execute(
+            'UPDATE topics SET original_filename = %s, file_data = %s, status = %s, reupload_reason = %s WHERE id = %s',
+            (original_filename, psycopg2.Binary(file_bytes), status, reason, topic_id)
+        )
+    else:
+        cursor.execute(
+            'UPDATE topics SET original_filename = ?, file_data = ?, status = ?, reupload_reason = ? WHERE id = ?',
+            (original_filename, file_bytes, status, reason, topic_id)
+        )
+        
     conn.commit()
     conn.close()
 
@@ -136,13 +172,14 @@ def upload_file(topic_id):
 def download_single_file(topic_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT original_filename, file_data FROM topics WHERE id = ?', (topic_id,))
+    cursor.execute('SELECT original_filename, file_data FROM topics WHERE id = %s' if DATABASE_URL else 'SELECT original_filename, file_data FROM topics WHERE id = ?', (topic_id,))
     row = cursor.fetchone()
     conn.close()
 
     if row and row['file_data']:
+        file_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
         return send_file(
-            io.BytesIO(row['file_data']),
+            io.BytesIO(file_bytes),
             as_attachment=True,
             download_name=row['original_filename']
         )
@@ -153,7 +190,7 @@ def download_single_file(topic_id):
 def merge_ppts():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT file_data FROM topics WHERE status IN ("제출완료", "재제출완료") AND file_data IS NOT NULL ORDER BY id ASC')
+    cursor.execute('SELECT file_data FROM topics WHERE status IN (\'제출완료\', \'재제출완료\') AND file_data IS NOT NULL ORDER BY id ASC')
     rows = cursor.fetchall()
     conn.close()
 
@@ -161,12 +198,12 @@ def merge_ppts():
         return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없습니다."}), 400
 
     try:
-        first_bytes = io.BytesIO(rows[0]['file_data'])
-        base_prs = Presentation(first_bytes)
+        first_bytes = bytes(rows[0]['file_data']) if isinstance(rows[0]['file_data'], memoryview) else rows[0]['file_data']
+        base_prs = Presentation(io.BytesIO(first_bytes))
 
         for row in rows[1:]:
-            sub_bytes = io.BytesIO(row['file_data'])
-            sub_prs = Presentation(sub_bytes)
+            sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
+            sub_prs = Presentation(io.BytesIO(sub_bytes))
             
             for slide in sub_prs.slides:
                 blank_layout = base_prs.slide_layouts[6]

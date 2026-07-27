@@ -7,7 +7,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
     body { background-color: #f4f6f9; padding: 30px; color: #333; }
-    .container { max-width: 1100px; margin: 0 auto; }
+    .container { max-width: 1150px; margin: 0 auto; }
     
     h1 { margin-bottom: 20px; text-align: center; color: #1e293b; }
     .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
@@ -42,6 +42,9 @@
     .reason-text { font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block; font-style: italic; }
 
     .btn-download { background-color: #0284c7; color: white; text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+    .btn-delete { background-color: #ef4444; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .btn-delete:hover { background-color: #dc2626; }
+
     .btn-merge { width: 100%; background-color: #059669; padding: 14px; font-size: 1.1rem; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
     .btn-merge:hover { background-color: #047857; }
   </style>
@@ -73,6 +76,7 @@
           <th>제출 상태 / 사유</th>
           <th>개별 다운로드</th>
           <th>자료 업로드</th>
+          <th>관리</th>
         </tr>
       </thead>
       <tbody id="topicTableBody"></tbody>
@@ -203,6 +207,20 @@
     }
   }
 
+  async function deleteTopic(topicId) {
+    if (!confirm('이 안건을 정말 삭제하시겠습니까?')) return;
+
+    const res = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
+    const data = await res.json();
+
+    if (data.success) {
+      alert('안건이 삭제되었습니다.');
+      fetchTopics();
+    } else {
+      alert('삭제 실패: ' + data.message);
+    }
+  }
+
   async function mergePPTs() {
     const response = await fetch('/api/merge', { method: 'POST' });
     if (response.ok) {
@@ -225,7 +243,7 @@
     tbody.innerHTML = '';
 
     if (topics.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 20px;">등록된 회의 안건이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 20px;">등록된 회의 안건이 없습니다.</td></tr>`;
       return;
     }
 
@@ -259,6 +277,9 @@
             <input type="file" id="file-${topic.id}" accept=".ppt, .pptx" style="font-size:0.75rem; width:150px;">
             <button onclick="uploadFile(${topic.id})" style="padding: 4px 8px; font-size:0.75rem; cursor:pointer;">${isDone ? '재제출' : '업로드'}</button>
           </div>
+        </td>
+        <td>
+          <button class="btn-delete" onclick="deleteTopic(${topic.id})">🗑️ 삭제</button>
         </td>
       `;
       tbody.appendChild(tr);
