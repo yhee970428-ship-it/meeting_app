@@ -1,7 +1,7 @@
 import os
 import io
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -12,7 +12,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
     if DATABASE_URL:
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
         return conn
     else:
         # 로컬 테스트용 SQLite 백업
@@ -154,7 +154,7 @@ def upload_file(topic_id):
     if DATABASE_URL:
         cursor.execute(
             'UPDATE topics SET original_filename = %s, file_data = %s, status = %s, reupload_reason = %s WHERE id = %s',
-            (original_filename, psycopg2.Binary(file_bytes), status, reason, topic_id)
+            (original_filename, file_bytes, status, reason, topic_id)
         )
     else:
         cursor.execute(
