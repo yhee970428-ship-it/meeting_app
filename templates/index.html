@@ -24,7 +24,7 @@
     .container { 
       max-width: 1080px; 
       margin: 0 auto; 
-    }
+    } 
     
     header {
       text-align: center;
@@ -51,7 +51,6 @@
       padding: 28px; 
       margin-bottom: 20px; 
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .card h2 { 
@@ -59,9 +58,6 @@
       font-weight: 700;
       margin-bottom: 20px; 
       color: #333d4b; 
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     .date-selection { 
@@ -92,7 +88,7 @@
       align-items: center; 
     }
     
-    input[type="text"], input[type="date"] { 
+    input[type="text"], input[type="date"], select { 
       width: 100%; 
       padding: 12px 14px; 
       border: 1px solid #e5e8eb; 
@@ -104,7 +100,7 @@
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
-    input[type="text"]:focus, input[type="date"]:focus {
+    input[type="text"]:focus, input[type="date"]:focus, select:focus {
       border-color: #3182f6;
       box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
     }
@@ -115,7 +111,25 @@
       margin-top: 6px; 
     }
 
-    /* 버튼 기본 및 클릭 애니메이션 */
+    /* 필터 제어바 (엑셀 스타일 조건 검색) */
+    .filter-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background-color: #f9fafb;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+
+    .filter-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #6b7684;
+      display: block;
+      margin-bottom: 6px;
+    }
+
     button, .btn-download {
       transition: all 0.15s ease-in-out;
       cursor: pointer;
@@ -134,14 +148,9 @@
       font-size: 0.9rem; 
       font-weight: 600;
       margin-bottom: 20px; 
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
     }
 
-    .btn-add-item:hover {
-      background: #e5e8eb;
-    }
+    .btn-add-item:hover { background: #e5e8eb; }
 
     .btn-remove-item { 
       background: #fee2e2; 
@@ -154,9 +163,7 @@
       font-size: 1rem;
     }
 
-    .btn-remove-item:hover {
-      background: #fdd8d8;
-    }
+    .btn-remove-item:hover { background: #fdd8d8; }
 
     .btn-submit-all { 
       background: #3182f6; 
@@ -170,11 +177,8 @@
       box-shadow: 0 4px 12px rgba(49, 130, 246, 0.2);
     }
 
-    .btn-submit-all:hover {
-      background: #1b64da;
-    }
+    .btn-submit-all:hover { background: #1b64da; }
 
-    /* 테두리 없이 시원한 토스형 테이블 */
     table { 
       width: 100%; 
       border-collapse: collapse; 
@@ -199,9 +203,7 @@
       color: #333d4b;
     }
 
-    tr:hover td {
-      background-color: #f9fafb;
-    }
+    tr:hover td { background-color: #f9fafb; }
 
     /* 라운드 캡슐 배지 */
     .badge { 
@@ -241,9 +243,7 @@
       display: inline-block;
     }
 
-    .btn-download:hover {
-      background-color: #d8e8ff;
-    }
+    .btn-download:hover { background-color: #d8e8ff; }
 
     .btn-delete { 
       background-color: #f2f4f6; 
@@ -270,9 +270,7 @@
       font-weight: 600;
     }
 
-    .btn-upload-action:hover {
-      background-color: #1b64da;
-    }
+    .btn-upload-action:hover { background-color: #1b64da; }
     
     .merge-grid { 
       display: grid; 
@@ -307,6 +305,26 @@
       cursor: pointer;
       margin-right: 8px;
     }
+
+    /* 하단 문의처 푸터 카드의 전용 스타일 */
+    .contact-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 20px 28px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+      font-size: 0.92rem;
+      color: #4e5968;
+    }
+
+    .contact-card strong {
+      color: #191f28;
+    }
+
+    .contact-card a {
+      color: #3182f6;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
@@ -317,8 +335,9 @@
     <p class="subtitle">부서별 회의 안건을 등록하고 파일 통합본을 손쉽게 생성해보세요.</p>
   </header>
 
+  <!-- 1. 회의 안건 목차 추가 -->
   <div class="card">
-    <h2>1. 회의 날짜 지정 및 안건/부서 다중 등록</h2>
+    <h2>회의 안건 목차 추가</h2>
     <div class="date-selection">
       <label>회의 날짜 선택</label>
       <input type="date" id="meetingDate">
@@ -328,8 +347,41 @@
     <button class="btn-submit-all" onclick="submitTopics()">회의 안건 전체 등록하기</button>
   </div>
 
+  <!-- 2. 부서별 제출 현황 대시보드 (조건별 조회 필터 적용) -->
   <div class="card">
-    <h2>2. 부서별 제출 현황 대시보드</h2>
+    <h2>부서별 제출 현황 대시보드</h2>
+    
+    <!-- 조건부서식 검색 필터 -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>📅 회의 날짜</label>
+        <select id="filterDate" onchange="applyFilters()">
+          <option value="">전체 날짜</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>📌 안건 목차</label>
+        <select id="filterTitle" onchange="applyFilters()">
+          <option value="">전체 목차</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>🏢 제출 부서</label>
+        <select id="filterDept" onchange="applyFilters()">
+          <option value="">전체 부서</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>💡 제출 상태</label>
+        <select id="filterStatus" onchange="applyFilters()">
+          <option value="">전체 상태</option>
+          <option value="제출필요">제출필요</option>
+          <option value="제출완료">제출완료</option>
+          <option value="재제출완료">재제출완료</option>
+        </select>
+      </div>
+    </div>
+
     <table>
       <thead>
         <tr>
@@ -346,8 +398,9 @@
     </table>
   </div>
 
+  <!-- 3. 회의자료 통합 파일 생성 -->
   <div class="card">
-    <h2>3. 회의자료 통합 파일 생성</h2>
+    <h2>회의자료 통합 파일 생성</h2>
     <p style="color: #8b95a1; margin-bottom: 16px; font-size: 0.9rem;">
       제출 완료된 파일들을 순서대로 자동 병합하여 하나의 통합 파일로 생성합니다.
     </p>
@@ -355,6 +408,11 @@
       <button class="btn-merge btn-merge-ppt" onclick="mergePPTs()">📊 PPT 통합본 다운로드</button>
       <button class="btn-merge btn-merge-hwp" onclick="mergeHWPs()">📝 한글(HWP) 통합본 다운로드</button>
     </div>
+  </div>
+
+  <!-- 하단 문의처 -->
+  <div class="contact-card">
+    문의처 : <strong>하연희 주임연구원</strong> (Tel. <strong>031-470-1638</strong>, E-mail. <a href="mailto:yhee@ktc.re.kr">yhee@ktc.re.kr</a>)
   </div>
 </div>
 
@@ -437,7 +495,49 @@
   async function fetchTopics() {
     const res = await fetch('/api/topics');
     currentTopics = await res.json();
-    renderTable(currentTopics);
+    populateFilterOptions(currentTopics);
+    applyFilters();
+  }
+
+  // 필터 셀렉트박스 옵션 자동 채우기
+  function populateFilterOptions(topics) {
+    const dateSelect = document.getElementById('filterDate');
+    const titleSelect = document.getElementById('filterTitle');
+    const deptSelect = document.getElementById('filterDept');
+
+    const selectedDate = dateSelect.value;
+    const selectedTitle = titleSelect.value;
+    const selectedDept = deptSelect.value;
+
+    const dates = [...new Set(topics.map(t => t.meeting_date))].sort().reverse();
+    const titles = [...new Set(topics.map(t => t.title))].sort();
+    const depts = [...new Set(topics.map(t => t.dept))].sort();
+
+    dateSelect.innerHTML = '<option value="">전체 날짜</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+    titleSelect.innerHTML = '<option value="">전체 목차</option>' + titles.map(t => `<option value="${t}">${t}</option>`).join('');
+    deptSelect.innerHTML = '<option value="">전체 부서</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
+
+    dateSelect.value = selectedDate;
+    titleSelect.value = selectedTitle;
+    deptSelect.value = selectedDept;
+  }
+
+  // 필터 조건 적용하여 테이블 렌더링
+  function applyFilters() {
+    const fDate = document.getElementById('filterDate').value;
+    const fTitle = document.getElementById('filterTitle').value;
+    const fDept = document.getElementById('filterDept').value;
+    const fStatus = document.getElementById('filterStatus').value;
+
+    const filtered = currentTopics.filter(topic => {
+      const matchDate = !fDate || topic.meeting_date === fDate;
+      const matchTitle = !fTitle || topic.title === fTitle;
+      const matchDept = !fDept || topic.dept === fDept;
+      const matchStatus = !fStatus || topic.status === fStatus;
+      return matchDate && matchTitle && matchDept && matchStatus;
+    });
+
+    renderTable(filtered);
   }
 
   async function deleteTopic(topicId) {
@@ -523,7 +623,7 @@
     tbody.innerHTML = '';
 
     if (topics.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#8b95a1; padding: 32px;">등록된 회의 안건이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#8b95a1; padding: 32px;">조회된 회의 안건이 없습니다.</td></tr>`;
       return;
     }
 
