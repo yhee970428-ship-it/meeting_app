@@ -9,12 +9,16 @@ app = Flask(__name__)
 
 DB_FILE = 'meeting_data.db'
 
-# DB 초기화 및 열 자동 추가(마이그레이션)
-def init_db():
+def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# DB 초기화 및 최신 컬럼 강제 보장
+def init_db():
+    conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 테이블 생성
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS topics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +32,6 @@ def init_db():
         )
     ''')
     
-    # 기존 DB에 file_data 컬럼이 없는 경우 대비한 자동 추가
     cursor.execute("PRAGMA table_info(topics)")
     columns = [col[1] for col in cursor.fetchall()]
     if 'file_data' not in columns:
@@ -41,10 +44,9 @@ def init_db():
 
 init_db()
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+@app.before_request
+def ensure_db():
+    init_db()
 
 @app.route('/')
 def index():
@@ -92,7 +94,7 @@ def get_topics():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 파일 업로드 (DB 영구 저장)
+# 파일 업로드
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
