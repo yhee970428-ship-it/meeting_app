@@ -188,10 +188,17 @@
       margin-bottom: 18px;
     }
 
+    /* 테이블 및 리사이저 커스텀 CSS */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.88rem;
+      table-layout: fixed; /* 컬럼 너비 조절에 필수 */
     }
 
     th, td {
@@ -199,6 +206,7 @@
       text-align: left;
       border-bottom: 1px solid #e2e8f0;
       word-break: break-all;
+      position: relative;
     }
 
     th {
@@ -206,6 +214,24 @@
       color: #334155;
       font-weight: bold;
       border-top: 1px solid #cbd5e1;
+      user-select: none;
+    }
+
+    /* 엑셀 스타일 경계선 리사이저 핸들 */
+    .resizer {
+      position: absolute;
+      right: 0;
+      top: 0;
+      height: 100%;
+      width: 6px;
+      cursor: col-resize;
+      user-select: none;
+      z-index: 10;
+    }
+
+    .resizer:hover,
+    .resizing {
+      border-right: 3px solid #3182f6;
     }
 
     tr:hover {
@@ -279,12 +305,12 @@
   <!-- 우측 메인 콘텐츠 -->
   <div class="main-content">
 
-    <!-- 1. 부서별 제출 현황 대시보드 (체크박스 및 파일명 칸 반영) -->
+    <!-- 1. 부서별 제출 현황 대시보드 -->
     <div id="tab-dashboard" class="page-section active">
       <div class="panel">
         <div style="display: flex; justify-content: space-between; align-items: center;" class="panel-title">
           <span>부서별 제출 현황 대시보드</span>
-          <span style="font-size: 0.82rem; font-weight: normal; color: #64748b;">* 취합할 항목을 선택(체크) 후 하단 통합 버튼을 눌러주세요.</span>
+          <span style="font-size: 0.82rem; font-weight: normal; color: #64748b;">* 각 열의 경계선을 드래그하여 간격을 엑셀처럼 조절할 수 있습니다.</span>
         </div>
         
         <!-- 검색 필터 -->
@@ -318,24 +344,29 @@
           </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 36px; text-align: center;">
-                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
-              </th>
-              <th style="width: 95px;">회의 날짜</th>
-              <th style="width: 150px;">안건 목차</th>
-              <th style="width: 100px;">제출 부서</th>
-              <th style="width: 110px;">제출 상태 / 사유</th>
-              <th>첨부 파일명</th>
-              <th style="width: 90px;">다운로드</th>
-              <th style="width: 200px;">파일 업로드</th>
-              <th style="width: 50px;">관리</th>
-            </tr>
-          </thead>
-          <tbody id="topicTableBody"></tbody>
-        </table>
+        <div class="table-container">
+          <table id="dashboardTable">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">
+                  <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                  <div class="resizer"></div>
+                </th>
+                <th style="width: 100px;">회의 날짜<div class="resizer"></div></th>
+                <!-- 목차 칸 너비를 기본적으로 넓게 지정(280px) -->
+                <th style="width: 280px;">안건 목차<div class="resizer"></div></th>
+                <th style="width: 110px;">제출 부서<div class="resizer"></div></th>
+                <th style="width: 120px;">제출 상태 / 사유<div class="resizer"></div></th>
+                <!-- 첨부 파일명 칸 너비를 비교적 슬림하게 지정(160px) -->
+                <th style="width: 160px;">첨부 파일명<div class="resizer"></div></th>
+                <th style="width: 90px;">다운로드<div class="resizer"></div></th>
+                <th style="width: 200px;">파일 업로드<div class="resizer"></div></th>
+                <th style="width: 60px;">관리</th>
+              </tr>
+            </thead>
+            <tbody id="topicTableBody"></tbody>
+          </table>
+        </div>
 
         <!-- 체크한 항목만 통합본 생성 버튼 -->
         <div class="merge-box">
@@ -415,6 +446,7 @@
     addTopicRow();
     fetchTopics();
     fetchFeedback();
+    initResizableColumns(); // 테이블 열 너비 조절 기능 초기화
   });
 
   function switchTab(tabId) {
@@ -423,6 +455,44 @@
 
     event.currentTarget.classList.add('active');
     document.getElementById(tabId).classList.add('active');
+  }
+
+  /* --- 엑셀 스타일 열 간격 드래그 조절 (Column Resizer) --- */
+  function initResizableColumns() {
+    const table = document.getElementById('dashboardTable');
+    const cols = table.querySelectorAll('th');
+
+    cols.forEach(col => {
+      const resizer = col.querySelector('.resizer');
+      if (!resizer) return;
+
+      let x = 0;
+      let w = 0;
+
+      const mouseDownHandler = function(e) {
+        x = e.clientX;
+        const styles = window.getComputedStyle(col);
+        w = parseInt(styles.width, 10);
+
+        resizer.classList.add('resizing');
+
+        document.addEventListener('mousemove', mouseMoveHandler);
+        document.addEventListener('mouseup', mouseUpHandler);
+      };
+
+      const mouseMoveHandler = function(e) {
+        const dx = e.clientX - x;
+        col.style.width = `${Math.max(w + dx, 40)}px`; // 최소 너비 40px 보장
+      };
+
+      const mouseUpHandler = function() {
+        resizer.classList.remove('resizing');
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+      };
+
+      resizer.addEventListener('mousedown', mouseDownHandler);
+    });
   }
 
   /* --- 안건 등록 --- */
