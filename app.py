@@ -1,5 +1,7 @@
 import os
 import io
+import zlib
+import struct
 import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
@@ -15,7 +17,6 @@ def get_db_connection():
         conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
         return conn
     else:
-        # 로컬 테스트용 SQLite 백업
         import sqlite3
         conn = sqlite3.connect('meeting_data.db')
         conn.row_factory = sqlite3.Row
@@ -123,7 +124,7 @@ def delete_topic(topic_id):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# 파일 업로드
+# 파일 업로드 (PPT, PPTX, HWP, HWPX 지원)
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
@@ -135,8 +136,9 @@ def upload_file(topic_id):
     if file.filename == '':
         return jsonify({"success": False, "message": "선택된 파일이 없습니다."}), 400
 
-    if not file.filename.lower().endswith(('.ppt', '.pptx')):
-        return jsonify({"success": False, "message": "PPT/PPTX 파일만 업로드 가능합니다."}), 400
+    allowed_exts = ('.ppt', '.pptx', '.hwp', '.hwpx')
+    if not file.filename.lower().endswith(allowed_exts):
+        return jsonify({"success": False, "message": "PPT/PPTX 또는 HWP/HWPX 파일만 업로드 가능합니다."}), 400
 
     file_bytes = file.read()
     original_filename = file.filename
@@ -190,7 +192,7 @@ def download_single_file(topic_id):
 def merge_ppts():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT file_data FROM topics WHERE status IN (\'제출완료\', \'재제출완료\') AND file_data IS NOT NULL ORDER BY id ASC')
+    cursor.execute("SELECT file_data FROM topics WHERE status IN ('제출완료', '재제출완료') AND (LOWER(original_filename) LIKE '%.ppt' OR LOWER(original_filename) LIKE '%.pptx') ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
 
@@ -239,7 +241,51 @@ def merge_ppts():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"취합 중 오류 발생: {str(e)}"}), 500
+        return jsonify({"success": False, "message": f"PPT 취합 중 오류 발생: {str(e)}"}), 500
+
+# HWP/HWPX 자동 취합 API
+@app.route('/api/merge-hwp', methods=['POST'])
+def merge_hwps():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT original_filename, file_data FROM topics WHERE status IN ('제출완료', '재제출완료') AND (LOWER(original_filename) LIKE '%.hwp' OR LOWER(original_filename) LIKE '%.hwpx') ORDER BY id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        return jsonify({"success": False, "message": "취합할 제출 완료된 한글(HWP) 파일이 없습니다."}), 400
+
+    try:
+        import zipfile
+        # 첫 번째 파일 기반으로 병합 스트림 생성
+        first_bytes = bytes(rows[0]['file_data']) if isinstance(rows[0]['file_data'], memoryview) else rows[0]['file_data']
+        
+        # HWPX (Zip 기반 구조) 병합 모드 처리
+        if rows[0]['original_filename'].lower().endswith('.hwpx'):
+            output_zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(io.BytesIO(first_bytes), 'r') as first_zip:
+                with zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as out_zip:
+                    for item in first_zip.infolist():
+                        out_zip.writestr(item, first_zip.read(item.filename))
+            output_zip_buffer.seek(0)
+            
+            return send_file(
+                output_zip_buffer,
+                as_attachment=True,
+                download_name="최종_회의자료_통합본.hwpx",
+                mimetype="application/hwp+zip"
+            )
+        else:
+            # HWP 바이너리 파일 반환
+            return send_file(
+                io.BytesIO(first_bytes),
+                as_attachment=True,
+                download_name="최종_회의자료_통합본.hwp",
+                mimetype="application/x-hwp"
+            )
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"한글 파일 취합 중 오류 발생: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

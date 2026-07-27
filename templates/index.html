@@ -7,7 +7,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
     body { background-color: #f4f6f9; padding: 30px; color: #333; }
-    .container { max-width: 1150px; margin: 0 auto; }
+    .container { max-width: 1100px; margin: 0 auto; }
     
     h1 { margin-bottom: 20px; text-align: center; color: #1e293b; }
     .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
@@ -42,11 +42,14 @@
     .reason-text { font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block; font-style: italic; }
 
     .btn-download { background-color: #0284c7; color: white; text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-    .btn-delete { background-color: #ef4444; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-    .btn-delete:hover { background-color: #dc2626; }
-
-    .btn-merge { width: 100%; background-color: #059669; padding: 14px; font-size: 1.1rem; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    .btn-merge:hover { background-color: #047857; }
+    .btn-delete { background-color: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+    
+    .merge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
+    .btn-merge { width: 100%; padding: 14px; font-size: 1rem; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .btn-merge-ppt { background-color: #059669; }
+    .btn-merge-ppt:hover { background-color: #047857; }
+    .btn-merge-hwp { background-color: #2563eb; }
+    .btn-merge-hwp:hover { background-color: #1d4ed8; }
   </style>
 </head>
 <body>
@@ -75,7 +78,7 @@
           <th>제출 부서</th>
           <th>제출 상태 / 사유</th>
           <th>개별 다운로드</th>
-          <th>자료 업로드</th>
+          <th>자료 업로드 (PPT, HWP)</th>
           <th>관리</th>
         </tr>
       </thead>
@@ -86,9 +89,12 @@
   <div class="card">
     <h2>3. 회의자료 통합 파일 생성</h2>
     <p style="color: #64748b; margin-bottom: 15px; font-size: 0.9rem;">
-      제출 완료된 파일들을 순서대로 자동 병합하여 하나의 PPT 파일로 생성합니다.
+      제출 완료된 파일들을 순서대로 자동 병합하여 하나의 통합 파일로 생성합니다.
     </p>
-    <button class="btn-merge" onclick="mergePPTs()">하나의 PPT로 병합하여 다운로드</button>
+    <div class="merge-grid">
+      <button class="btn-merge btn-merge-ppt" onclick="mergePPTs()">📊 PPT 통합본 다운로드</button>
+      <button class="btn-merge btn-merge-hwp" onclick="mergeHWPs()">📝 한글(HWP) 통합본 다운로드</button>
+    </div>
   </div>
 </div>
 
@@ -174,10 +180,21 @@
     renderTable(currentTopics);
   }
 
+  async function deleteTopic(topicId) {
+    if (!confirm('정말 이 안건을 삭제하시겠습니까?')) return;
+    const res = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      fetchTopics();
+    } else {
+      alert('삭제 중 오류가 발생했습니다.');
+    }
+  }
+
   async function uploadFile(topicId) {
     const fileInput = document.getElementById(`file-${topicId}`);
     if (!fileInput.files[0]) {
-      alert('업로드할 PPT 파일을 선택해 주세요.');
+      alert('업로드할 PPT 또는 HWP 파일 선택해 주세요.');
       return;
     }
 
@@ -200,24 +217,10 @@
 
     const data = await res.json();
     if (data.success) {
-      alert('파일이 제출되었습니다.');
+      alert('파일이 성공적으로 제출되었습니다.');
       fetchTopics();
     } else {
       alert(data.message);
-    }
-  }
-
-  async function deleteTopic(topicId) {
-    if (!confirm('이 안건을 정말 삭제하시겠습니까?')) return;
-
-    const res = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
-    const data = await res.json();
-
-    if (data.success) {
-      alert('안건이 삭제되었습니다.');
-      fetchTopics();
-    } else {
-      alert('삭제 실패: ' + data.message);
     }
   }
 
@@ -234,7 +237,24 @@
       a.remove();
     } else {
       const data = await response.json();
-      alert(data.message || '다운로드 중 오류가 발생했습니다.');
+      alert(data.message || 'PPT 취합 중 오류가 발생했습니다.');
+    }
+  }
+
+  async function mergeHWPs() {
+    const response = await fetch('/api/merge-hwp', { method: 'POST' });
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "최종_회의자료_통합본.hwpx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } else {
+      const data = await response.json();
+      alert(data.message || '한글 파일 취합 중 오류가 발생했습니다.');
     }
   }
 
@@ -274,12 +294,12 @@
         <td>${downloadBtn}</td>
         <td>
           <div style="display:flex; gap: 4px;">
-            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx" style="font-size:0.75rem; width:150px;">
+            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.75rem; width:160px;">
             <button onclick="uploadFile(${topic.id})" style="padding: 4px 8px; font-size:0.75rem; cursor:pointer;">${isDone ? '재제출' : '업로드'}</button>
           </div>
         </td>
         <td>
-          <button class="btn-delete" onclick="deleteTopic(${topic.id})">🗑️ 삭제</button>
+          <button class="btn-delete" onclick="deleteTopic(${topic.id})">삭제</button>
         </td>
       `;
       tbody.appendChild(tr);
