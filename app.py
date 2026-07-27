@@ -205,23 +205,41 @@ def download_single_file(topic_id):
         )
     return "파일을 찾을 수 없습니다.", 404
 
-# PPT 자동 병합
+# 선택한 항목 PPT 자동 취합
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
+    data = request.json or {}
+    selected_ids = data.get('ids', [])
+
+    if not selected_ids:
+        return jsonify({"success": False, "message": "취합할 항목을 선택해 주세요."}), 400
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT file_data FROM topics WHERE status IN ('제출완료', '재제출완료') AND (LOWER(original_filename) LIKE '%.ppt' OR LOWER(original_filename) LIKE '%.pptx') ORDER BY id ASC")
+    
+    # 선택된 ID 중 PPT 파일만 조회
+    if DATABASE_URL:
+        query = "SELECT original_filename, file_data FROM topics WHERE id = ANY(%s) AND status IN ('제출완료', '재제출완료') ORDER BY id ASC"
+        cursor.execute(query, (selected_ids,))
+    else:
+        placeholders = ','.join(['?'] * len(selected_ids))
+        query = f"SELECT original_filename, file_data FROM topics WHERE id IN ({placeholders}) AND status IN ('제출완료', '재제출완료') ORDER BY id ASC"
+        cursor.execute(query, selected_ids)
+
     rows = cursor.fetchall()
     conn.close()
 
-    if not rows:
-        return jsonify({"success": False, "message": "취합할 제출 완료된 PPT 파일이 없습니다."}), 400
+    # PPT 파일만 필터링
+    ppt_rows = [r for r in rows if r['original_filename'].lower().endswith(('.ppt', '.pptx'))]
+
+    if not ppt_rows:
+        return jsonify({"success": False, "message": "선택한 항목 중 제출 완료된 PPT 파일이 없습니다."}), 400
 
     try:
-        first_bytes = bytes(rows[0]['file_data']) if isinstance(rows[0]['file_data'], memoryview) else rows[0]['file_data']
+        first_bytes = bytes(ppt_rows[0]['file_data']) if isinstance(ppt_rows[0]['file_data'], memoryview) else ppt_rows[0]['file_data']
         base_prs = Presentation(io.BytesIO(first_bytes))
 
-        for row in rows[1:]:
+        for row in ppt_rows[1:]:
             sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
             sub_prs = Presentation(io.BytesIO(sub_bytes))
             
@@ -254,30 +272,46 @@ def merge_ppts():
         return send_file(
             output_stream,
             as_attachment=True,
-            download_name="최종_회의자료_통합본.pptx",
+            download_name="선택_회의자료_통합본.pptx",
             mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation"
         )
 
     except Exception as e:
         return jsonify({"success": False, "message": f"PPT 취합 중 오류 발생: {str(e)}"}), 500
 
-# HWP/HWPX 자동 취합 API
+# 선택한 항목 HWP/HWPX 자동 취합 API
 @app.route('/api/merge-hwp', methods=['POST'])
 def merge_hwps():
+    data = request.json or {}
+    selected_ids = data.get('ids', [])
+
+    if not selected_ids:
+        return jsonify({"success": False, "message": "취합할 항목을 선택해 주세요."}), 400
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT original_filename, file_data FROM topics WHERE status IN ('제출완료', '재제출완료') AND (LOWER(original_filename) LIKE '%.hwp' OR LOWER(original_filename) LIKE '%.hwpx') ORDER BY id ASC")
+
+    if DATABASE_URL:
+        query = "SELECT original_filename, file_data FROM topics WHERE id = ANY(%s) AND status IN ('제출완료', '재제출완료') ORDER BY id ASC"
+        cursor.execute(query, (selected_ids,))
+    else:
+        placeholders = ','.join(['?'] * len(selected_ids))
+        query = f"SELECT original_filename, file_data FROM topics WHERE id IN ({placeholders}) AND status IN ('제출완료', '재제출완료') ORDER BY id ASC"
+        cursor.execute(query, selected_ids)
+
     rows = cursor.fetchall()
     conn.close()
 
-    if not rows:
-        return jsonify({"success": False, "message": "취합할 제출 완료된 한글(HWP) 파일이 없습니다."}), 400
+    hwp_rows = [r for r in rows if r['original_filename'].lower().endswith(('.hwp', '.hwpx'))]
+
+    if not hwp_rows:
+        return jsonify({"success": False, "message": "선택한 항목 중 제출 완료된 한글(HWP) 파일이 없습니다."}), 400
 
     try:
         import zipfile
-        first_bytes = bytes(rows[0]['file_data']) if isinstance(rows[0]['file_data'], memoryview) else rows[0]['file_data']
+        first_bytes = bytes(hwp_rows[0]['file_data']) if isinstance(hwp_rows[0]['file_data'], memoryview) else hwp_rows[0]['file_data']
         
-        if rows[0]['original_filename'].lower().endswith('.hwpx'):
+        if hwp_rows[0]['original_filename'].lower().endswith('.hwpx'):
             output_zip_buffer = io.BytesIO()
             with zipfile.ZipFile(io.BytesIO(first_bytes), 'r') as first_zip:
                 with zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as out_zip:
@@ -288,14 +322,14 @@ def merge_hwps():
             return send_file(
                 output_zip_buffer,
                 as_attachment=True,
-                download_name="최종_회의자료_통합본.hwpx",
+                download_name="선택_회의자료_통합본.hwpx",
                 mimetype="application/hwp+zip"
             )
         else:
             return send_file(
                 io.BytesIO(first_bytes),
                 as_attachment=True,
-                download_name="최종_회의자료_통합본.hwp",
+                download_name="선택_회의자료_통합본.hwp",
                 mimetype="application/x-hwp"
             )
 

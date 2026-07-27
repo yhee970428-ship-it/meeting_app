@@ -20,7 +20,7 @@
       overflow: hidden;
     }
 
-    /* 좌측 사이드바 (실무 인트라넷 스타일) */
+    /* 좌측 사이드바 */
     .sidebar {
       width: 260px;
       background-color: #1e293b;
@@ -72,7 +72,6 @@
       font-weight: bold;
     }
 
-    /* 하단 항상 고정 문의처 */
     .sidebar-contact {
       padding: 20px;
       border-top: 1px solid #334155;
@@ -91,7 +90,7 @@
       text-decoration: none;
     }
 
-    /* 메인 콘텐츠 영역 */
+    /* 메인 콘텐츠 */
     .main-content {
       flex: 1;
       padding: 30px;
@@ -106,7 +105,6 @@
       display: block;
     }
 
-    /* 실무 패널 스타일 (과도한 AI 효과 제거) */
     .panel {
       background: #ffffff;
       border: 1px solid #cbd5e1;
@@ -124,7 +122,6 @@
       border-bottom: 2px solid #e2e8f0;
     }
 
-    /* 폼 요소 */
     .form-group {
       margin-bottom: 16px;
     }
@@ -159,7 +156,6 @@
       align-items: center;
     }
 
-    /* 버튼 스타일 */
     .btn {
       padding: 9px 16px;
       font-size: 0.9rem;
@@ -181,7 +177,6 @@
     .btn-success { background-color: #10b981; color: white; }
     .btn-success:hover { background-color: #059669; }
 
-    /* 대시보드 조건 필터 */
     .filter-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -193,7 +188,6 @@
       margin-bottom: 18px;
     }
 
-    /* 표 (Table) 디자인 - 깔끔한 실무용 */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -201,9 +195,10 @@
     }
 
     th, td {
-      padding: 11px 12px;
+      padding: 11px 10px;
       text-align: left;
       border-bottom: 1px solid #e2e8f0;
+      word-break: break-all;
     }
 
     th {
@@ -217,7 +212,6 @@
       background-color: #f8fafc;
     }
 
-    /* 배지 상태 표기 */
     .status-tag {
       display: inline-block;
       padding: 4px 8px;
@@ -230,20 +224,20 @@
     .tag-green { background-color: #d1fae5; color: #059669; }
     .tag-blue { background-color: #dbeafe; color: #2563eb; }
 
-    /* 통합 다운로드 구역 */
     .merge-box {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
       gap: 14px;
-      margin-top: 12px;
+      align-items: center;
+      justify-content: flex-end;
+      margin-top: 16px;
     }
 
-    .merge-box .btn {
-      padding: 14px;
-      font-size: 0.95rem;
+    .filename-text {
+      font-size: 0.82rem;
+      color: #0f172a;
+      font-weight: 600;
     }
 
-    /* 의견 상세 Modal/Accordion 대신 깔끔한 텍스트 */
     .feedback-content-preview {
       font-size: 0.82rem;
       color: #64748b;
@@ -273,7 +267,7 @@
       </ul>
     </div>
 
-    <!-- 맨 아래 고정 문의처 -->
+    <!-- 고정 문의처 -->
     <div class="sidebar-contact">
       <div style="margin-bottom: 4px;"><strong>[시스템 문의처]</strong></div>
       하연희 주임연구원<br>
@@ -285,12 +279,15 @@
   <!-- 우측 메인 콘텐츠 -->
   <div class="main-content">
 
-    <!-- 1. 부서별 제출 현황 대시보드 + 통합본 생성 창 -->
+    <!-- 1. 부서별 제출 현황 대시보드 (체크박스 및 파일명 칸 반영) -->
     <div id="tab-dashboard" class="page-section active">
       <div class="panel">
-        <div class="panel-title">부서별 제출 현황 대시보드</div>
+        <div style="display: flex; justify-content: space-between; align-items: center;" class="panel-title">
+          <span>부서별 제출 현황 대시보드</span>
+          <span style="font-size: 0.82rem; font-weight: normal; color: #64748b;">* 취합할 항목을 선택(체크) 후 하단 통합 버튼을 눌러주세요.</span>
+        </div>
         
-        <!-- 엑셀 스타일 조건별 조회 필터 -->
+        <!-- 검색 필터 -->
         <div class="filter-grid">
           <div>
             <label>📅 회의 날짜</label>
@@ -324,27 +321,26 @@
         <table>
           <thead>
             <tr>
-              <th>회의 날짜</th>
-              <th>안건 목차</th>
-              <th>제출 부서</th>
-              <th>제출 상태 / 사유</th>
-              <th>다운로드</th>
-              <th>파일 업로드 (PPT, HWP)</th>
-              <th>관리</th>
+              <th style="width: 36px; text-align: center;">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+              </th>
+              <th style="width: 95px;">회의 날짜</th>
+              <th style="width: 150px;">안건 목차</th>
+              <th style="width: 100px;">제출 부서</th>
+              <th style="width: 110px;">제출 상태 / 사유</th>
+              <th>첨부 파일명</th>
+              <th style="width: 90px;">다운로드</th>
+              <th style="width: 200px;">파일 업로드</th>
+              <th style="width: 50px;">관리</th>
             </tr>
           </thead>
           <tbody id="topicTableBody"></tbody>
         </table>
-      </div>
 
-      <div class="panel">
-        <div class="panel-title">회의자료 통합 파일 생성</div>
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 12px;">
-          제출 완료된 파일들을 순서대로 자동 병합하여 하나의 통합 파일로 생성합니다.
-        </p>
+        <!-- 체크한 항목만 통합본 생성 버튼 -->
         <div class="merge-box">
-          <button class="btn btn-success" onclick="mergePPTs()">📊 PPT 통합본 다운로드</button>
-          <button class="btn btn-primary" onclick="mergeHWPs()">📝 한글(HWP) 통합본 다운로드</button>
+          <button class="btn btn-success" onclick="mergeSelectedPPTs()">📊 선택한 PPT 통합본 다운로드</button>
+          <button class="btn btn-primary" onclick="mergeSelectedHWPs()">📝 선택한 한글(HWP) 통합본 다운로드</button>
         </div>
       </div>
     </div>
@@ -421,7 +417,6 @@
     fetchFeedback();
   });
 
-  // 메뉴 탭 전환 함수
   function switchTab(tabId) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
@@ -430,7 +425,7 @@
     document.getElementById(tabId).classList.add('active');
   }
 
-  /* --- 안건 등록 관련 --- */
+  /* --- 안건 등록 --- */
   function addTopicRow() {
     const container = document.getElementById('topicContainer');
     const div = document.createElement('div');
@@ -484,7 +479,7 @@
     }
   }
 
-  /* --- 대시보드 관련 --- */
+  /* --- 대시보드 --- */
   async function fetchTopics() {
     const res = await fetch('/api/topics');
     currentTopics = await res.json();
@@ -534,9 +529,10 @@
   function renderTable(topics) {
     const tbody = document.getElementById('topicTableBody');
     tbody.innerHTML = '';
+    document.getElementById('selectAll').checked = false;
 
     if (topics.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 20px;">등록 및 조회된 안건이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#94a3b8; padding: 20px;">등록 및 조회된 안건이 없습니다.</td></tr>`;
       return;
     }
 
@@ -551,19 +547,27 @@
 
       const isDone = topic.status === '제출완료' || topic.status === '재제출완료';
       const downloadBtn = isDone
-        ? `<a href="/download/single/${topic.id}" class="btn btn-secondary" style="font-size:0.78rem; text-decoration:none;">💾 다운로드</a>`
+        ? `<a href="/download/single/${topic.id}" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 8px; text-decoration:none;">💾 다운로드</a>`
         : `<span style="color:#cbd5e1; font-size:0.8rem;">미제출</span>`;
+
+      const fileName = topic.original_filename 
+        ? `<span class="filename-text">📎 ${topic.original_filename}</span>` 
+        : `<span style="color:#cbd5e1; font-size:0.8rem;">-</span>`;
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
+        <td style="text-align:center;">
+          <input type="checkbox" class="topic-checkbox" value="${topic.id}">
+        </td>
         <td>${topic.meeting_date}</td>
         <td><strong>${topic.title}</strong></td>
         <td>${topic.dept}</td>
         <td>${statusBadge}</td>
+        <td>${fileName}</td>
         <td>${downloadBtn}</td>
         <td>
           <div style="display:flex; gap: 4px;">
-            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.75rem; width:150px;">
+            <input type="file" id="file-${topic.id}" accept=".ppt, .pptx, .hwp, .hwpx" style="font-size:0.75rem; width:130px;">
             <button class="btn btn-primary" onclick="uploadFile(${topic.id})" style="padding:4px 8px; font-size:0.75rem;">${isDone ? '재제출' : '업로드'}</button>
           </div>
         </td>
@@ -573,6 +577,69 @@
       `;
       tbody.appendChild(tr);
     });
+  }
+
+  function toggleSelectAll(masterCert) {
+    const checkboxes = document.querySelectorAll('.topic-checkbox');
+    checkboxes.forEach(cb => cb.checked = masterCert.checked);
+  }
+
+  function getSelectedIds() {
+    const checkboxes = document.querySelectorAll('.topic-checkbox:checked');
+    return Array.from(checkboxes).map(cb => parseInt(cb.value));
+  }
+
+  /* --- 선택한 파일 취합 기능 --- */
+  async function mergeSelectedPPTs() {
+    const selectedIds = getSelectedIds();
+    if (selectedIds.length === 0) {
+      alert('취합할 항목을 하나 이상 체크해 주세요.');
+      return;
+    }
+
+    const response = await fetch('/api/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: selectedIds })
+    });
+
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "선택_회의자료_통합본.pptx";
+      a.click();
+    } else {
+      const data = await response.json();
+      alert(data.message || 'PPT 취합 중 오류가 발생했습니다.');
+    }
+  }
+
+  async function mergeSelectedHWPs() {
+    const selectedIds = getSelectedIds();
+    if (selectedIds.length === 0) {
+      alert('취합할 항목을 하나 이상 체크해 주세요.');
+      return;
+    }
+
+    const response = await fetch('/api/merge-hwp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: selectedIds })
+    });
+
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "선택_회의자료_통합본.hwpx";
+      a.click();
+    } else {
+      const data = await response.json();
+      alert(data.message || '한글 파일 취합 중 오류가 발생했습니다.');
+    }
   }
 
   async function uploadFile(topicId) {
@@ -608,37 +675,7 @@
     if (data.success) fetchTopics();
   }
 
-  async function mergePPTs() {
-    const response = await fetch('/api/merge', { method: 'POST' });
-    if (response.ok) {
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "최종_회의자료_통합본.pptx";
-      a.click();
-    } else {
-      const data = await response.json();
-      alert(data.message || 'PPT 취합 중 오류가 발생했습니다.');
-    }
-  }
-
-  async function mergeHWPs() {
-    const response = await fetch('/api/merge-hwp', { method: 'POST' });
-    if (response.ok) {
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "최종_회의자료_통합본.hwpx";
-      a.click();
-    } else {
-      const data = await response.json();
-      alert(data.message || '한글 파일 취합 중 오류가 발생했습니다.');
-    }
-  }
-
-  /* --- 의견 제출 게시판 관련 --- */
+  /* --- 의견 제출 --- */
   async function submitFeedback() {
     const submit_date = document.getElementById('fbDate').value;
     const dept = document.getElementById('fbDept').value.trim();
