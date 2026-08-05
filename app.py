@@ -1,10 +1,10 @@
 import os
 import io
-import copy
 import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 app = Flask(__name__)
 
@@ -142,7 +142,7 @@ def delete_topic(topic_id):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# 파일 업로드
+# 파일 업로드 (PPT, PPTX, HWP, HWPX 지원)
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
@@ -205,7 +205,7 @@ def download_single_file(topic_id):
         )
     return "파일을 찾을 수 없습니다.", 404
 
-# 선택한 항목 PPT 자동 취합 (슬라이드 개체 틀 충돌 방지 및 안전 이관)
+# 선택한 항목 PPT 자동 취합
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
     data = request.json or {}
@@ -217,6 +217,7 @@ def merge_ppts():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # 선택된 ID 중 PPT 파일만 조회
     if DATABASE_URL:
         query = "SELECT original_filename, file_data FROM topics WHERE id = ANY(%s) AND status IN ('제출완료', '재제출완료') ORDER BY id ASC"
         cursor.execute(query, (selected_ids,))
@@ -228,6 +229,7 @@ def merge_ppts():
     rows = cursor.fetchall()
     conn.close()
 
+    # PPT 파일만 필터링
     ppt_rows = [r for r in rows if r['original_filename'].lower().endswith(('.ppt', '.pptx'))]
 
     if not ppt_rows:
@@ -237,26 +239,31 @@ def merge_ppts():
         first_bytes = bytes(ppt_rows[0]['file_data']) if isinstance(ppt_rows[0]['file_data'], memoryview) else ppt_rows[0]['file_data']
         base_prs = Presentation(io.BytesIO(first_bytes))
 
-        # 기본 레이아웃 지정 (빈 슬라이드 레이아웃 선호)
-        blank_layout = base_prs.slide_layouts[6] if len(base_prs.slide_layouts) > 6 else base_prs.slide_layouts[0]
-
         for row in ppt_rows[1:]:
             sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
             sub_prs = Presentation(io.BytesIO(sub_bytes))
             
             for slide in sub_prs.slides:
-                # 빈 슬라이드 인스턴스 생성
+                blank_layout = base_prs.slide_layouts[6]
                 new_slide = base_prs.slides.add_slide(blank_layout)
 
-                # 기존 슬라이드의 객체(shape) 요소를 복사하여 추가
                 for shape in slide.shapes:
-                    # 삭제된 기본 레이아웃 개체 틀(placeholder)인 경우 재복사되지 않도록 걸러냄
-                    if shape.is_placeholder and not shape.text_frame.text.strip():
-                        continue
-                    
-                    # Element 요소 깊은 복사 (Deep Copy) 후 트리 추가
-                    new_elm = copy.deepcopy(shape.element)
-                    new_slide.shapes._spTree.append(new_elm)
+                    if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                        try:
+                            image_bytes = shape.image.blob
+                            image_stream = io.BytesIO(image_bytes)
+                            new_slide.shapes.add_picture(
+                                image_stream, shape.left, shape.top, shape.width, shape.height
+                            )
+                        except Exception:
+                            from copy import deepcopy
+                            new_slide.shapes._spTree.insert_element_before(deepcopy(shape.element), 'p:extLst')
+                    else:
+                        try:
+                            from copy import deepcopy
+                            new_slide.shapes._spTree.insert_element_before(deepcopy(shape.element), 'p:extLst')
+                        except Exception:
+                            pass
 
         output_stream = io.BytesIO()
         base_prs.save(output_stream)
