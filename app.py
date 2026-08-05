@@ -5,6 +5,7 @@ from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from copy import deepcopy
 
 app = Flask(__name__)
 
@@ -205,7 +206,7 @@ def download_single_file(topic_id):
         )
     return "파일을 찾을 수 없습니다.", 404
 
-# 선택한 항목 PPT 자동 취합
+# 선택한 항목 PPT 자동 취합 (슬라이드 마스터 레이아웃 동적 매핑)
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
     data = request.json or {}
@@ -236,17 +237,45 @@ def merge_ppts():
         return jsonify({"success": False, "message": "선택한 항목 중 제출 완료된 PPT 파일이 없습니다."}), 400
 
     try:
+        # 첫 번째 PPT 파일의 마스터/레이아웃 전체 구조를 기준(Base)으로 지정
         first_bytes = bytes(ppt_rows[0]['file_data']) if isinstance(ppt_rows[0]['file_data'], memoryview) else ppt_rows[0]['file_data']
         base_prs = Presentation(io.BytesIO(first_bytes))
+
+        # Base 프레젠테이션의 레이아웃 이름 매핑 사전 구축
+        base_layouts_by_name = {layout.name: layout for layout in base_prs.slide_layouts}
 
         for row in ppt_rows[1:]:
             sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
             sub_prs = Presentation(io.BytesIO(sub_bytes))
             
             for slide in sub_prs.slides:
-                blank_layout = base_prs.slide_layouts[6]
-                new_slide = base_prs.slides.add_slide(blank_layout)
+                # 1. 원본 슬라이드가 사용하는 레이아웃과 일치하는 Base 마스터 레이아웃 탐색
+                target_layout = None
+                sub_layout_name = slide.slide_layout.name
+                
+                if sub_layout_name in base_layouts_by_name:
+                    target_layout = base_layouts_by_name[sub_layout_name]
+                else:
+                    try:
+                        layout_idx = sub_prs.slide_layouts.index(slide.slide_layout)
+                        if layout_idx < len(base_prs.slide_layouts):
+                            target_layout = base_prs.slide_layouts[layout_idx]
+                    except ValueError:
+                        pass
+                
+                # 일치하는 레이아웃이 없을 경우 기본 레이아웃 적용
+                if not target_layout:
+                    target_layout = base_prs.slide_layouts[6] if len(base_prs.slide_layouts) > 6 else base_prs.slide_layouts[0]
 
+                # 2. 첫 번째 PPT 마스터 기반으로 새 슬라이드 생성
+                new_slide = base_prs.slides.add_slide(target_layout)
+
+                # 3. 레이아웃 자동 생성으로 포함된 빈 플레이스홀더 폼 제거 (중복 방지)
+                for ph in list(new_slide.placeholders):
+                    sp = ph._element
+                    sp.getparent().remove(sp)
+
+                # 4. 각 슬라이드의 모든 도형/이미지 요소를 순서대로 추가
                 for shape in slide.shapes:
                     if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
                         try:
@@ -256,11 +285,9 @@ def merge_ppts():
                                 image_stream, shape.left, shape.top, shape.width, shape.height
                             )
                         except Exception:
-                            from copy import deepcopy
                             new_slide.shapes._spTree.insert_element_before(deepcopy(shape.element), 'p:extLst')
                     else:
                         try:
-                            from copy import deepcopy
                             new_slide.shapes._spTree.insert_element_before(deepcopy(shape.element), 'p:extLst')
                         except Exception:
                             pass
