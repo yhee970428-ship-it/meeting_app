@@ -1,5 +1,6 @@
 import os
 import io
+import copy
 import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
@@ -204,7 +205,7 @@ def download_single_file(topic_id):
         )
     return "파일을 찾을 수 없습니다.", 404
 
-# 선택한 항목 PPT 자동 취합 (슬라이드 레이아웃 및 서식 완벽 보존)
+# 선택한 항목 PPT 자동 취합 (슬라이드 개체 틀 충돌 방지 및 안전 이관)
 @app.route('/api/merge', methods=['POST'])
 def merge_ppts():
     data = request.json or {}
@@ -236,22 +237,26 @@ def merge_ppts():
         first_bytes = bytes(ppt_rows[0]['file_data']) if isinstance(ppt_rows[0]['file_data'], memoryview) else ppt_rows[0]['file_data']
         base_prs = Presentation(io.BytesIO(first_bytes))
 
+        # 기본 레이아웃 지정 (빈 슬라이드 레이아웃 선호)
+        blank_layout = base_prs.slide_layouts[6] if len(base_prs.slide_layouts) > 6 else base_prs.slide_layouts[0]
+
         for row in ppt_rows[1:]:
             sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
             sub_prs = Presentation(io.BytesIO(sub_bytes))
             
             for slide in sub_prs.slides:
-                # 슬라이드의 레이아웃 구조와 원본 매핑을 온전히 유지한 채 병합
-                slide_layout = slide.slide_layout
-                try:
-                    # 베이스 presentation에 원본 슬라이드 레이아웃 가져오기
-                    new_slide = base_prs.slides.add_slide(slide_layout)
-                except Exception:
-                    new_slide = base_prs.slides.add_slide(base_prs.slide_layouts[6])
+                # 빈 슬라이드 인스턴스 생성
+                new_slide = base_prs.slides.add_slide(blank_layout)
 
-                # 원본 슬라이드 내부 element 및 릴레이션 요소를 트리 레벨에서 전량 이관
+                # 기존 슬라이드의 객체(shape) 요소를 복사하여 추가
                 for shape in slide.shapes:
-                    new_slide.shapes._spTree.append(shape.element)
+                    # 삭제된 기본 레이아웃 개체 틀(placeholder)인 경우 재복사되지 않도록 걸러냄
+                    if shape.is_placeholder and not shape.text_frame.text.strip():
+                        continue
+                    
+                    # Element 요소 깊은 복사 (Deep Copy) 후 트리 추가
+                    new_elm = copy.deepcopy(shape.element)
+                    new_slide.shapes._spTree.append(new_elm)
 
         output_stream = io.BytesIO()
         base_prs.save(output_stream)
