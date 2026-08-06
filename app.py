@@ -143,7 +143,7 @@ def delete_topic(topic_id):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# 파일 업로드 (PPT, PPTX, HWP, HWPX 지원)
+# 파일 업로드
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
@@ -179,7 +179,7 @@ def upload_file(topic_id):
         )
     else:
         cursor.execute(
-            'UPDATE topics SET original_filename = ?, file_data = ?, status = ?, reupload_reason = ? WHERE id = ?',
+            'UPDATE topics SET original_filename = ?, file_data = ?, status = ?, reupload_reason = ? WHERE id = %s',
             (original_filename, file_bytes, status, reason, topic_id)
         )
         
@@ -207,9 +207,9 @@ def download_single_file(topic_id):
     return "파일을 찾을 수 없습니다.", 404
 
 
-# --- PPT 정화 및 복제 헬퍼 함수 ---
+# --- 핵심 수정: 정화 및 레이아웃/이미지 안전 복제 함수 ---
 def remove_empty_placeholders(slide):
-    """슬라이드 내 유령 개체 틀 정화"""
+    """빈 개체 틀 제거"""
     shapes_to_remove = []
     for shape in slide.shapes:
         if shape.is_placeholder:
@@ -227,44 +227,56 @@ def remove_empty_placeholders(slide):
         except Exception:
             pass
 
-def copy_slide_content(dest_prs, source_slide, base_layouts_by_name):
-    """마스터 레이아웃을 보존하며 슬라이드 복사"""
-    source_layout_name = source_slide.slide_layout.name
-    target_layout = None
+def copy_slide_content(dest_prs, source_slide):
+    """
+    1. 배경(p:bg) XML 직접 이식
+    2. 레이아웃 장식 도형 복사
+    3. 이미지/미디어 바이너리 재생성 (엑스박스 예방)
+    4. 일반 도형 Deep Copy
+    """
+    blank_layout = dest_prs.slide_layouts[6] if len(dest_prs.slide_layouts) > 6 else dest_prs.slide_layouts[0]
+    new_slide = dest_prs.slides.add_slide(blank_layout)
 
-    if source_layout_name in base_layouts_by_name:
-        target_layout = base_layouts_by_name[source_layout_name]
-    else:
-        try:
-            layout_idx = source_slide.part.package.presentations[0].slide_layouts.index(source_slide.slide_layout)
-            if layout_idx < len(dest_prs.slide_layouts):
-                target_layout = dest_prs.slide_layouts[layout_idx]
-        except Exception:
-            pass
-
-    if not target_layout:
-        target_layout = dest_prs.slide_layouts[6] if len(dest_prs.slide_layouts) > 6 else dest_prs.slide_layouts[0]
-
-    new_slide = dest_prs.slides.add_slide(target_layout)
-
-    for shape in list(new_slide.placeholders):
+    # 기본 placeholder 제거
+    for shape in list(new_slide.shapes):
         sp = shape._element
         sp.getparent().remove(sp)
 
-    for shape in source_slide.shapes:
-        new_element = copy.deepcopy(shape._element)
-        new_slide.shapes._spTree.append(new_element)
+    # 1. 배경 XML 복사 (슬라이드 본인 배경 또는 레이아웃 배경)
+    nsmap = {'p': 'http://schemas.openxmlformats.org/presentationml/2006/main'}
+    source_bg = source_slide._element.find('p:bg', nsmap)
+    if source_bg is None and hasattr(source_slide, 'slide_layout'):
+        source_bg = source_slide.slide_layout._element.find('p:bg', nsmap)
 
-    for rel in source_slide.part.rels.values():
-        if "notesSlide" in rel.reltype or "slideLayout" in rel.reltype:
-            continue
-        try:
-            new_slide.part.rels.get_or_add_rel(
-                rel.reltype,
-                rel.target_ref if rel.is_external else rel.target_part
-            )
-        except Exception:
-            pass
+    if source_bg is not None:
+        new_bg = copy.deepcopy(source_bg)
+        csld = new_slide._element.find('p:cSld', nsmap)
+        if csld is not None:
+            csld.insert(0, new_bg)
+
+    # 2. 레이아웃에 포함된 원본 배경 도형/장식 이식
+    if hasattr(source_slide, 'slide_layout'):
+        for l_shape in source_slide.slide_layout.shapes:
+            if not l_shape.is_placeholder:
+                new_l_element = copy.deepcopy(l_shape._element)
+                new_slide.shapes._spTree.insert(2, new_l_element)
+
+    # 3. 소스 슬라이드의 본문 도형/이미지 안전 복사
+    for shape in source_slide.shapes:
+        # 이미지(Picture)인 경우 바이너리 파이프라인으로 새로 생성해 엑스박스 방지
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            try:
+                image_bytes = shape.image.blob
+                image_stream = io.BytesIO(image_bytes)
+                new_slide.shapes.add_picture(
+                    image_stream, shape.left, shape.top, shape.width, shape.height
+                )
+            except Exception:
+                new_element = copy.deepcopy(shape._element)
+                new_slide.shapes._spTree.append(new_element)
+        else:
+            new_element = copy.deepcopy(shape._element)
+            new_slide.shapes._spTree.append(new_element)
 
     return new_slide
 
@@ -298,24 +310,22 @@ def merge_ppts():
         return jsonify({"success": False, "message": "선택한 항목 중 제출 완료된 PPT 파일이 없습니다."}), 400
 
     try:
-        # 첫번째 PPT를 메인 병합 파일로 로드 (마스터 레이아웃 기준)
+        # 첫번째 PPT를 Base로 가져옴
         first_bytes = bytes(ppt_rows[0]['file_data']) if isinstance(ppt_rows[0]['file_data'], memoryview) else ppt_rows[0]['file_data']
         base_prs = Presentation(io.BytesIO(first_bytes))
 
-        # 첫 번째 파일 정화
+        # 첫번째 PPT 슬라이드 정화
         for slide in base_prs.slides:
             remove_empty_placeholders(slide)
 
-        base_layouts_by_name = {layout.name: layout for layout in base_prs.slide_layouts}
-
-        # 두 번째 파일부터 병합 진행
+        # 두 번째 파일부터 레이아웃/이미지 안전 복제 진행
         for row in ppt_rows[1:]:
             sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
             sub_prs = Presentation(io.BytesIO(sub_bytes))
             
             for slide in sub_prs.slides:
                 remove_empty_placeholders(slide)
-                new_slide = copy_slide_content(base_prs, slide, base_layouts_by_name)
+                new_slide = copy_slide_content(base_prs, slide)
                 remove_empty_placeholders(new_slide)
 
         output_stream = io.BytesIO()
