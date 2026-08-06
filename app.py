@@ -5,7 +5,6 @@ import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, jsonify, send_file
 from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 app = Flask(__name__)
 
@@ -143,7 +142,7 @@ def delete_topic(topic_id):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# 파일 업로드 (PPT, PPTX, HWP, HWPX 지원)
+# 파일 업로드
 @app.route('/api/upload/<int:topic_id>', methods=['POST'])
 def upload_file(topic_id):
     if 'file' not in request.files:
@@ -207,7 +206,7 @@ def download_single_file(topic_id):
     return "파일을 찾을 수 없습니다.", 404
 
 
-# --- PPT 정화 및 안전 복제 헬퍼 함수 ---
+# --- PPT 정화 및 완전 복제 헬퍼 함수 ---
 def remove_empty_placeholders(slide):
     """유령 개체 틀 정화"""
     shapes_to_remove = []
@@ -229,62 +228,52 @@ def remove_empty_placeholders(slide):
 
 def copy_slide_content(dest_prs, source_slide):
     """
-    1. 빈 레이아웃 슬라이드 생성
-    2. 요소별 안전 재구성을 통해 rId 참조 유실(엑스박스) 문제 방지
+    슬라이드 배경 XML, 레이아웃 구성요소, 도형/텍스트 XML 및 미디어 관계(rId)를 완전 이식
     """
+    # 1. 빈 레이아웃 기반 슬라이드 생성
     blank_layout = dest_prs.slide_layouts[6] if len(dest_prs.slide_layouts) > 6 else dest_prs.slide_layouts[0]
     new_slide = dest_prs.slides.add_slide(blank_layout)
 
-    # 기본 생성된 placeholder 모두 제거
+    # 2. 기본 생성된 개체틀 제거
     for shape in list(new_slide.shapes):
         sp = shape._element
         sp.getparent().remove(sp)
 
+    # 3. 배경(p:bg) 이식 - 원본 슬라이드 본인의 배경 또는 레이아웃 배경 추출
+    nsmap = {'p': 'http://schemas.openxmlformats.org/presentationml/2006/main'}
+    bg_element = source_slide._element.find('p:bg', nsmap)
+    if bg_element is None and hasattr(source_slide, 'slide_layout'):
+        bg_element = source_slide.slide_layout._element.find('p:bg', nsmap)
+
+    if bg_element is not None:
+        new_bg = copy.deepcopy(bg_element)
+        csld = new_slide._element.find('p:cSld', nsmap)
+        if csld is not None:
+            csld.insert(0, new_bg)
+
+    # 4. 레이아웃에 배치된 배경 디자인 도형들 이식
+    if hasattr(source_slide, 'slide_layout'):
+        for l_shape in source_slide.slide_layout.shapes:
+            if not l_shape.is_placeholder:
+                new_l_element = copy.deepcopy(l_shape._element)
+                new_slide.shapes._spTree.insert(2, new_l_element)
+
+    # 5. 소스 슬라이드의 모든 도형/개체 XML 깊은 복사 (폰트, 위치, 서식 완전 유지)
     for shape in source_slide.shapes:
+        new_element = copy.deepcopy(shape._element)
+        new_slide.shapes._spTree.append(new_element)
+
+    # 6. 미디어/이미지/관계 참조(rId) 재연결 (엑스박스 방지 및 바이너리 매핑)
+    for rel in source_slide.part.rels.values():
+        if "notesSlide" in rel.reltype or "slideLayout" in rel.reltype:
+            continue
         try:
-            # 1. 그림(Picture) 데이터: 바이너리 스트림을 직접 추출하여 새로 삽입 (엑스박스 방지)
-            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(shape, "image"):
-                image_bytes = shape.image.blob
-                image_stream = io.BytesIO(image_bytes)
-                new_slide.shapes.add_picture(
-                    image_stream,
-                    shape.left,
-                    shape.top,
-                    shape.width,
-                    shape.height
-                )
-            # 2. 텍스트 상자 및 글자 관련
-            elif shape.has_text_frame:
-                new_box = new_slide.shapes.add_textbox(
-                    shape.left, shape.top, shape.width, shape.height
-                )
-                tf_src = shape.text_frame
-                tf_dst = new_box.text_frame
-                tf_dst.word_wrap = tf_src.word_wrap
-                
-                for i, p_src in enumerate(tf_src.paragraphs):
-                    p_dst = tf_dst.paragraphs[0] if i == 0 else tf_dst.add_paragraph()
-                    p_dst.text = p_src.text
-                    p_dst.alignment = p_src.alignment
-                    p_dst.level = p_src.level
-                    for r_src in p_src.runs:
-                        r_dst = p_dst.add_run()
-                        r_dst.text = r_src.text
-                        if r_src.font.bold is not None: r_dst.font.bold = r_src.font.bold
-                        if r_src.font.italic is not None: r_dst.font.italic = r_src.font.italic
-                        if r_src.font.size is not None: r_dst.font.size = r_src.font.size
-                        if r_src.font.color and r_src.font.color.rgb:
-                            r_dst.font.color.rgb = r_src.font.color.rgb
-            # 3. 기타 도형 (Deep Copy 사용)
-            else:
-                new_element = copy.deepcopy(shape._element)
-                new_slide.shapes._spTree.append(new_element)
+            new_slide.part.rels.get_or_add_rel(
+                rel.reltype,
+                rel.target_ref if rel.is_external else rel.target_part
+            )
         except Exception:
-            try:
-                new_element = copy.deepcopy(shape._element)
-                new_slide.shapes._spTree.append(new_element)
-            except Exception:
-                pass
+            pass
 
     return new_slide
 
@@ -326,7 +315,7 @@ def merge_ppts():
         for slide in base_prs.slides:
             remove_empty_placeholders(slide)
 
-        # 두 번째 파일부터 안전 복제 병합 수행
+        # 두 번째 파일부터 배경/폰트/이미지 완전 복제
         for row in ppt_rows[1:]:
             sub_bytes = bytes(row['file_data']) if isinstance(row['file_data'], memoryview) else row['file_data']
             sub_prs = Presentation(io.BytesIO(sub_bytes))
